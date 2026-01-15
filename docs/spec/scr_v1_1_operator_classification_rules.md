@@ -145,3 +145,24 @@ N/A (MINOR version).
 - No implementation work may rely on an SCR until it is **approved and frozen**
   as part of a new spec version.
 - All approved SCRs must be referenced in the next **Spec Freeze Declaration**.
+
+---
+
+## REVIEW RECORD (v1.1)
+
+- Checklist: `docs/spec/00j_scr_review_checklist_v1.md`
+- Review date: 2026-01-15
+- Reviewers: Codex execution (per user instruction)
+- Stage results:
+  - Stage 1 (Completeness): PASS
+  - Stage 2 (Scope & Authority): PASS
+  - Stage 3 (Compatibility): PASS
+  - Stage 4 (Impact Analysis): PASS
+  - Stage 5 (Conformance & Certification): PASS
+  - Stage 6 (Migration, if breaking): N/A
+  - Stage 7 (Alternatives & Risk): PASS
+  - Stage 8 (Decision Readiness): NEEDS REVISION
+- Disposition: Accept with Modifications
+- Conditions (if any): Provide concrete deterministic classification rules or an
+  appendix that will be frozen with v1.1.
+- Reference summary: `docs/audit/scr_v1_1_review_summary.md`
