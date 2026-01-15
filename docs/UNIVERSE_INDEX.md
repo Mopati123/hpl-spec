@@ -35,3 +35,11 @@ conformance, certification, and intake artifacts.
 - Implementation Intake Checklist (v1): `docs/spec/00e_implementation_intake_checklist_v1.md`
 - Spec Change Request Template (v1): `docs/spec/00h_spec_change_request_template_v1.md`
 - Spec v1.1 Roadmap Skeleton (Informational): `docs/spec/00i_spec_v1_1_roadmap_skeleton.md`
+- v1 Compliance Memo: `docs/audit/hpl_v1_compliance_memo.md`
+- Level-2 Tooling Track Plan (Informational): `docs/spec/level2_tooling_track_plan.md`
+
+## Future Evolution (Informational)
+
+- SCR: Remove bootstrap cls=C: `docs/spec/scr_v1_1_remove_bootstrap_cls_c.md`
+- SCR: Operator classification rules: `docs/spec/scr_v1_1_operator_classification_rules.md`
+- SCR: IR invariants clarification: `docs/spec/scr_v1_1_ir_invariants_clarification.md`
