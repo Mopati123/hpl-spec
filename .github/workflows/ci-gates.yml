@@ -1,0 +1,25 @@
+name: HPL CI Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Gate A - Spec Integrity
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python tools/ci_gate_spec_integrity.py
+      - name: Gate C - Prohibited Behavior
+        run: python tools/ci_gate_prohibited_behavior.py
+      - name: Schema Check - ProgramIR
+        run: python tools/validate_ir_schema.py

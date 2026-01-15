@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HPL Operator Registry",
+  "type": "object",
+  "required": ["sub_hamiltonian", "version", "operators"],
+  "properties": {
+    "sub_hamiltonian": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "operators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "class", "impl_ref"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string",
+            "enum": ["U", "M", "Ω", "C", "I", "A"]
+          },
+          "impl_ref": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

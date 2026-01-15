@@ -1,0 +1,11 @@
+{
+  "sub_hamiltonian": "backends_H",
+  "version": "0.1.0",
+  "operators": [
+    {
+      "id": "QASM_LOWERING",
+      "class": "C",
+      "impl_ref": "hpl.backends.quantum.qasm"
+    }
+  ]
+}

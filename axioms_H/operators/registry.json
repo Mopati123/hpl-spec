@@ -1,0 +1,26 @@
+{
+  "sub_hamiltonian": "axioms_H",
+  "version": "0.1.0",
+  "operators": [
+    {
+      "id": "ALPHABET",
+      "class": "C",
+      "impl_ref": "hpl.axioms.alphabet"
+    },
+    {
+      "id": "GRAMMAR",
+      "class": "C",
+      "impl_ref": "hpl.axioms.grammar"
+    },
+    {
+      "id": "ALGEBRA",
+      "class": "C",
+      "impl_ref": "hpl.axioms.operator_algebra"
+    },
+    {
+      "id": "INVARIANTS",
+      "class": "C",
+      "impl_ref": "hpl.axioms.invariants"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HPL ProgramIR",
+  "type": "object",
+  "required": [
+    "program_id",
+    "hamiltonian",
+    "operators",
+    "invariants",
+    "scheduler"
+  ],
+  "properties": {
+    "program_id": {
+      "type": "string"
+    },
+    "hamiltonian": {
+      "type": "object",
+      "required": [
+        "terms"
+      ],
+      "properties": {
+        "terms": {
+          "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "operator_id",
+            "cls",
+            "coefficient"
+          ],
+          "properties": {
+            "operator_id": {
+              "type": "string"
+            },
+            "cls": {
+              "type": "string",
+              "enum": [
+                "U",
+                "M",
+                "Ω",
+                "C",
+                "I",
+                "A"
+              ]
+            },
+              "coefficient": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "operators": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "type",
+          "commutes_with",
+          "backend_map"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "commutes_with": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backend_map": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "expression"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scheduler": {
+      "type": "object",
+      "required": [
+        "collapse_policy",
+        "authorized_observers"
+      ],
+      "properties": {
+        "collapse_policy": {
+          "type": "string"
+        },
+        "authorized_observers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

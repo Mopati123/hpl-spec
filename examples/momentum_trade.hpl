@@ -1,0 +1,7 @@
+;; Surface DSL example - requires macro-expansion into axiomatic HPL forms (see docs/spec/02_bnf.md)
+(defstrategy momentum-trade
+  (params (window 60) (threshold 0.02))
+  (let ((s (signal ma-diff price window)))
+    (if (> s threshold)
+        (buy size)
+        (sell size))))

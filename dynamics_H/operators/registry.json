@@ -1,0 +1,21 @@
+{
+  "sub_hamiltonian": "dynamics_H",
+  "version": "0.1.0",
+  "operators": [
+    {
+      "id": "IR_SCHEMA",
+      "class": "C",
+      "impl_ref": "hpl.dynamics.ir"
+    },
+    {
+      "id": "SCHEDULER",
+      "class": "C",
+      "impl_ref": "hpl.dynamics.scheduler"
+    },
+    {
+      "id": "SIMULATOR",
+      "class": "C",
+      "impl_ref": "hpl.dynamics.simulator"
+    }
+  ]
+}

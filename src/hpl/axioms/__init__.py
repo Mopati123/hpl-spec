@@ -1,0 +1,1 @@
+"""Axiomatic core validation."""

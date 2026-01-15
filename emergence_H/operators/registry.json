@@ -1,0 +1,16 @@
+{
+  "sub_hamiltonian": "emergence_H",
+  "version": "0.1.0",
+  "operators": [
+    {
+      "id": "DSL_PARSE",
+      "class": "C",
+      "impl_ref": "hpl.emergence.dsl.parser"
+    },
+    {
+      "id": "MACROS",
+      "class": "C",
+      "impl_ref": "hpl.emergence.dsl.macros"
+    }
+  ]
+}
