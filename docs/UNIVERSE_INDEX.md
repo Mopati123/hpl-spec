@@ -48,6 +48,13 @@ conformance, certification, and intake artifacts.
 - SCR: Operator classification rules: `docs/spec/scr_v1_1_operator_classification_rules.md`
 - SCR: IR invariants clarification: `docs/spec/scr_v1_1_ir_invariants_clarification.md`
 
+## Level-3 Planning (Proposed / Unfrozen)
+
+- SCR: Scheduler Model — `docs/spec/scr_level3_scheduler_model.md`
+- SCR: Execution Semantics — `docs/spec/scr_level3_execution_semantics.md`
+- SCR: Measurement & Observation — `docs/spec/scr_level3_measurement_observation.md`
+- SCR: Determinism Policy — `docs/spec/scr_level3_determinism_policy.md`
+
 ## Audit & Evidence
 
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
