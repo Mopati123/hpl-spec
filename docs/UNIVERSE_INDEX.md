@@ -19,7 +19,7 @@
 
 - Operator registry schema: `docs/spec/06_operator_registry_schema.json`
 - IR compatibility / freeze policy: `docs/spec/04b_ir_freeze_policy.md`
-- Macro boundary (surface â†’ axiomatic): `docs/spec/02b_macro_boundary.md`
+- Macro boundary (surface -> axiomatic): `docs/spec/02b_macro_boundary.md`
 
 ## Conformance & Certification
 
@@ -40,7 +40,7 @@ conformance, certification, and intake artifacts.
 - Spec v1.1 Roadmap Skeleton (Informational): `docs/spec/00i_spec_v1_1_roadmap_skeleton.md`
 - v1 Compliance Memo: `docs/audit/hpl_v1_compliance_memo.md`
 - Level-2 Tooling Track Plan (Informational): `docs/spec/level2_tooling_track_plan.md`
- - Diagnostics Error Taxonomy (Informational): `docs/spec/diagnostics_error_taxonomy_v1.md`
+- Diagnostics Error Taxonomy (Informational): `docs/spec/diagnostics_error_taxonomy_v1.md`
 
 ## Future Evolution (Informational)
 
@@ -50,10 +50,10 @@ conformance, certification, and intake artifacts.
 
 ## Level-3 Planning (Proposed / Unfrozen)
 
-- SCR: Scheduler Model â€” `docs/spec/scr_level3_scheduler_model.md`
-- SCR: Execution Semantics â€” `docs/spec/scr_level3_execution_semantics.md`
-- SCR: Measurement & Observation â€” `docs/spec/scr_level3_measurement_observation.md`
-- SCR: Determinism Policy â€” `docs/spec/scr_level3_determinism_policy.md`
+- SCR: Scheduler Model — `docs/spec/scr_level3_scheduler_model.md`
+- SCR: Execution Semantics — `docs/spec/scr_level3_execution_semantics.md`
+- SCR: Measurement & Observation — `docs/spec/scr_level3_measurement_observation.md`
+- SCR: Determinism Policy — `docs/spec/scr_level3_determinism_policy.md`
 - v2.0 Freeze Prerequisites: `docs/spec/00m_v2_0_freeze_prerequisites.md`
 - Level-3 Conformance Checklist (v2.0): `docs/spec/00n_conformance_checklist_level3_v2_0.md`
 - Level-3 Conformance Test Mapping (v2.0): `docs/spec/00o_conformance_test_mapping_level3_v2_0.md`
@@ -62,4 +62,5 @@ conformance, certification, and intake artifacts.
 
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
 - Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
-- HPL v1 â†’ v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
+- HPL v1 -> v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
+- HPL v1.1 -> v2.0 Migration Memo: `docs/audit/hpl_v1_1_to_v2_0_migration_memo.md`
