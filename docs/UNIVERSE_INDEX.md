@@ -72,3 +72,7 @@ conformance, certification, and intake artifacts.
 
 - Level-3 Certification Walkthrough Note: `docs/audit/level3_certification_walkthrough_2026-01-16.md`
 - Level-3 Certification Walkthrough: `docs/audit/example_level3_certification_walkthrough.md`
+
+## Publications
+
+- HPL v1 -> v2.0 Evolution Overview (External): `docs/publish/hpl_v1_to_v2_0_evolution_overview.md`
