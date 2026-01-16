@@ -52,3 +52,4 @@ conformance, certification, and intake artifacts.
 
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
 - Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
+- HPL v1 → v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
