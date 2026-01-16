@@ -1,11 +1,10 @@
-# Level-3 Scheduler SCR Review Update — 2026-01-16
+# Level-3 Scheduler SCR Review Update - 2026-01-16
 
 ## Summary
 
-Normalized SCR now passes checklist stages 1–6. Remaining gap is a documented
-risks section (Stage 7), so disposition is **Accept with Modifications**.
+Normalized SCR now passes checklist stages 1-8. The risks section is added and
+reviewed, so disposition is **Accept** and ready for v2.0 review.
 
 ## Required Edit
 
-- Add a Risks section acknowledging determinism/replay guarantees and scheduler
-  policy declaration risks.
+- None (risks section added).

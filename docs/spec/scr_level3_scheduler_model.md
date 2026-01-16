@@ -121,6 +121,22 @@ Impact statements:
 
 ---
 
+## Risks
+
+- **Determinism guarantees:** Determinism is guaranteed only under a declared scheduler
+  policy and with nondeterministic operators explicitly marked. Without a declared
+  policy, determinism claims are invalid.
+- **Replay requirements:** Valid replay requires capturing the scheduler policy
+  identifier/version, any declared nondeterminism seeds, and a tick log. Replay is
+  invalid if policy metadata or nondeterministic operator declarations differ.
+- **Scheduler policy declaration:** Certification claims must declare the scheduler
+  policy identifier and version. Policies may be fixed or pluggable, but any policy
+  used for certification must be explicitly named and versioned.
+- **Risk mitigations:** Require audit artifacts that record policy metadata and
+  tick logs; future conformance checklists will include these as evidence hooks.
+
+---
+
 ## Alternatives Considered
 
 - Implicit execution (rejected)
@@ -177,10 +193,8 @@ Impact statements:
   - Stage 4 (Impact Analysis): PASS
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): PASS
-  - Stage 7 (Alternatives & Risk): NEEDS REVISION
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any):
-  - Add a Risks section acknowledging determinism/replay guarantees and scheduler
-    policy declaration risks.
+  - Stage 7 (Alternatives & Risk): PASS
+  - Stage 8 (Decision Readiness): PASS
+- Disposition: Accept
+- Conditions (if any): None.
 - Reference summary: `docs/audit/scr_level3_scheduler_review_update_2026-01-16.md`
