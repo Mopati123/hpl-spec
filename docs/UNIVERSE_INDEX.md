@@ -36,6 +36,7 @@ conformance, certification, and intake artifacts.
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
 - Conformance Test Mapping (v1.1): `docs/spec/00c_conformance_test_mapping_v1_1.md`
 - Certification Report Template (v1): `docs/spec/00d_certification_report_template_v1.md`
+- Certification Report Template (v2.0): `docs/spec/00p_certification_report_template_v2_0.md`
 - Implementation Intake Checklist (v1): `docs/spec/00e_implementation_intake_checklist_v1.md`
 - Spec Change Request Template (v1): `docs/spec/00h_spec_change_request_template_v1.md`
 - Spec v1.1 Roadmap Skeleton (Informational): `docs/spec/00i_spec_v1_1_roadmap_skeleton.md`
