@@ -27,3 +27,28 @@ without changing HPL Spec v1 semantics.
 ## Notes
 
 This document is informational only and does not override the frozen v1 spec.
+
+---
+
+## EXECUTION AUTHORIZATION (Level-2)
+
+Checklist reference: `docs/spec/00k_level2_execution_checklist_v1.md`
+
+### Entry Gate (Checked)
+
+[x] HPL Spec v1 is frozen and certified (Level-1 complete)  
+[x] Level-1 CI gates are green  
+[x] No open, approved SCRs are being implemented  
+[x] Work is explicitly labeled **Level-2 (Tooling Only)**  
+
+### Allowed Level-2 Work Items (Initial Scope)
+
+- Operator registry validation tooling (schema-only)
+- Traceability metadata (surface → expanded → axiomatic → IR)
+- Structured diagnostics and stable error categories
+
+### Prohibited Items (Acknowledged)
+
+- No grammar changes, operator class changes, or IR schema changes
+- No runtime, scheduler, observers, or backends
+- No semantic enforcement by tooling
