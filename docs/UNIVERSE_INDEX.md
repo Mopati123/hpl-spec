@@ -48,3 +48,4 @@ conformance, certification, and intake artifacts.
 ## Audit & Evidence
 
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
+- Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
