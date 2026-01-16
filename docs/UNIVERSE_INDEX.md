@@ -29,6 +29,7 @@ conformance, certification, and intake artifacts.
 ## Implementation Governance (Normative)
 
 - Spec Freeze Declaration (v1): `docs/spec/00_spec_freeze_declaration_v1.md`
+- HPL Spec Freeze v1.1: `docs/spec/00_spec_freeze_declaration_v1_1.md`
 - Conformance Checklist (v1): `docs/spec/00b_conformance_checklist_v1.md`
 - Conformance Checklist (v1.1): `docs/spec/00b_conformance_checklist_v1_1.md`
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
