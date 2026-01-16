@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Set
+from typing import Iterable, List, Set, Tuple
 
 from ...ast import Node, SourceLocation, iter_nodes
 from ...errors import MacroExpansionError
+from ...trace import TraceCollector
 
 
-def _collect_symbols(nodes: Iterable[Node]) -> List[str]:
+def _collect_symbol_nodes(nodes: Iterable[Node]) -> List[Tuple[str, Node]]:
     seen: Set[str] = set()
-    ordered: List[str] = []
+    ordered: List[Tuple[str, Node]] = []
     for node in nodes:
         if node.is_atom and isinstance(node.value, str):
             symbol = node.value
             if symbol not in seen:
                 seen.add(symbol)
-                ordered.append(symbol)
+                ordered.append((symbol, node))
     return ordered
 
 
@@ -35,15 +36,28 @@ def _make_term(operator_id: str, location: SourceLocation | None) -> Node:
     )
 
 
-def expand_program(program: List[Node]) -> List[Node]:
-    symbols = _collect_symbols(iter_nodes(Node(program)))
+def expand_program(program: List[Node], trace: TraceCollector | None = None) -> List[Node]:
+    if trace:
+        trace.record_phase(program, "surface")
+
+    symbols = _collect_symbol_nodes(iter_nodes(Node(program)))
     if not symbols:
         raise MacroExpansionError("Surface program contains no symbols")
 
     terms: List[Node] = []
-    for symbol in symbols:
+    mappings: List[Tuple[Node, Node]] = []
+    for symbol, source_node in symbols:
         operator_id = f"SURF_{symbol}"
-        terms.append(_make_term(operator_id, None))
+        term_node = _make_term(operator_id, None)
+        terms.append(term_node)
+        mappings.append((source_node, term_node))
 
     hamiltonian = Node([_make_symbol("hamiltonian", None), *terms], None)
-    return [hamiltonian]
+    expanded = [hamiltonian]
+
+    if trace:
+        trace.record_phase(expanded, "expanded")
+        for source_node, term_node in mappings:
+            trace.map_nodes(source_node, "surface", term_node, "expanded", "surface_to_expanded")
+
+    return expanded

@@ -6,6 +6,7 @@ from typing import List
 
 from ..ast import Node
 from ..errors import ValidationError
+from ..trace import TraceCollector
 
 
 LAMBDA_SYMBOL = "?"
@@ -38,7 +39,11 @@ def _fail(message: str, node: Node, path: List[int]) -> None:
     raise ValidationError(message, node.location, path)
 
 
-def validate_program(program: List[Node]) -> None:
+def validate_program(program: List[Node], trace: TraceCollector | None = None) -> None:
+    if trace:
+        trace.record_phase(program, "axiomatic")
+        trace.map_by_path("expanded", "axiomatic", "expanded_to_axiomatic")
+
     for index, form in enumerate(program):
         _reject_surface_symbols(form, [index])
         _validate_form(form, [index])

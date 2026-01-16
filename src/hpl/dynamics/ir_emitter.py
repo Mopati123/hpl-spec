@@ -8,9 +8,14 @@ from typing import Dict, List, Tuple
 
 from ..ast import Node
 from ..errors import ValidationError
+from ..trace import TraceCollector
 
 
-def emit_program_ir(program: List[Node], program_id: str = "unknown") -> Dict:
+def emit_program_ir(
+    program: List[Node],
+    program_id: str = "unknown",
+    trace: TraceCollector | None = None,
+) -> Dict:
     terms = _collect_terms(program)
     operator_ids = [term[0] for term in terms]
 
@@ -23,7 +28,7 @@ def emit_program_ir(program: List[Node], program_id: str = "unknown") -> Dict:
                     "cls": "C",
                     "coefficient": coefficient,
                 }
-                for operator_id, coefficient in terms
+                for operator_id, coefficient, _ in terms
             ]
         },
         "operators": {
@@ -42,6 +47,10 @@ def emit_program_ir(program: List[Node], program_id: str = "unknown") -> Dict:
     }
 
     validate_program_ir(ir)
+    if trace:
+        trace.record_phase(program, "axiomatic")
+        for idx, (operator_id, _coefficient, node) in enumerate(terms):
+            trace.record_ir_term(idx, node, "axiomatic", operator_id)
     return ir
 
 
@@ -50,14 +59,14 @@ def validate_program_ir(ir: Dict) -> None:
     _validate_program_ir_schema(ir, schema)
 
 
-def _collect_terms(program: List[Node]) -> List[Tuple[str, float]]:
-    terms: List[Tuple[str, float]] = []
+def _collect_terms(program: List[Node]) -> List[Tuple[str, float, Node]]:
+    terms: List[Tuple[str, float, Node]] = []
     for form in program:
         _collect_terms_from_node(form, terms)
     return terms
 
 
-def _collect_terms_from_node(node: Node, terms: List[Tuple[str, float]]) -> None:
+def _collect_terms_from_node(node: Node, terms: List[Tuple[str, float, Node]]) -> None:
     if node.is_atom:
         return
     items = node.as_list()
@@ -74,7 +83,7 @@ def _collect_terms_from_node(node: Node, terms: List[Tuple[str, float]]) -> None
         _collect_terms_from_node(item, terms)
 
 
-def _term_from_node(node: Node) -> Tuple[str, float] | None:
+def _term_from_node(node: Node) -> Tuple[str, float, Node] | None:
     if node.is_atom:
         return None
     items = node.as_list()
@@ -86,7 +95,7 @@ def _term_from_node(node: Node) -> Tuple[str, float] | None:
         coefficient = items[2]
         if operator_ref.is_atom and isinstance(operator_ref.value, str) and coefficient.is_atom:
             if isinstance(coefficient.value, (int, float)):
-                return operator_ref.value, float(coefficient.value)
+                return operator_ref.value, float(coefficient.value), node
     return None
 
 
