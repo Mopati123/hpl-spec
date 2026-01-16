@@ -61,11 +61,21 @@ without binding to a runtime.
 
 ## Proposed Change
 
+### Definitions
+
+- **Program state:** The abstract state evolved by scheduler-authorized ticks.
+  See `docs/spec/scr_level3_scheduler_model.md` for tick and ordering authority.
+- **Evolution function:** The state transition applied per tick. Determinism and
+  replay claims depend on a declared scheduler policy.
+- **Observables:** Declared interfaces permitted to expose state. See
+  `docs/spec/scr_level3_measurement_observation.md` for observation constraints.
+
 ### Proposed Semantics (Draft)
 
 - Execution is a sequence of scheduler ticks.
 - Each tick applies a well-defined evolution function.
 - Only declared observables may expose state.
+  Determinism and replay claims are valid only with a declared scheduler policy.
 
 ### Invariants
 
@@ -191,13 +201,8 @@ Impact statements:
   - Stage 4 (Impact Analysis): PASS
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): PASS
-  - Stage 7 (Alternatives & Risk): PASS
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any):
-  - Add a concise Definitions section for program state, evolution function, and
-    observables, or explicitly reference the Scheduler Model SCR as the authority
-    for these terms.
-  - Clarify the required dependency on scheduler policy declarations for
-    execution determinism claims.
+- Stage 7 (Alternatives & Risk): PASS
+- Stage 8 (Decision Readiness): PASS
+- Disposition: Ready
+- Conditions (if any): None
 - Reference summary: None
