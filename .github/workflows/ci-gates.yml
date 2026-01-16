@@ -25,5 +25,7 @@ jobs:
         run: python tools/validate_operator_registries.py
       - name: Gate L2-B - Traceability
         run: python -m unittest tests/test_traceability.py
+      - name: Gate L2-C - Diagnostics
+        run: python -m unittest tests/test_diagnostics.py
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
