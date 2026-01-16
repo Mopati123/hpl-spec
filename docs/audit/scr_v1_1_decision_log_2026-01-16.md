@@ -2,10 +2,10 @@
 
 ## Decisions
 
-- `scr_v1_1_remove_bootstrap_cls_c.md`: **Accept with Modifications** (NOT READY)
-  - Requires deterministic classification rules before v1.1 freeze.
-- `scr_v1_1_operator_classification_rules.md`: **Accept with Modifications** (NOT READY)
-  - Requires explicit rule text and conformance updates.
+- `scr_v1_1_remove_bootstrap_cls_c.md`: **Accept** (READY FOR v1.1 FREEZE)
+  - Classification rules adopted; bootstrap default removed under v1.1.
+- `scr_v1_1_operator_classification_rules.md`: **Accept** (READY FOR v1.1 FREEZE)
+  - Rule text added; conformance updates pending.
 - `scr_v1_1_ir_invariants_clarification.md`: **Accept** (READY FOR v1.1 FREEZE)
 
 ## Notes

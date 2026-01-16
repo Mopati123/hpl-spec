@@ -62,11 +62,32 @@ and improve auditability without changing the IR schema.
 
 ## Proposed Change
 
-- Define deterministic rules for assigning `{U, M, Ω, C, I, A}`.
+- Define deterministic rules for assigning `{U, M, ?, C, I, A}`.
 - Reference those rules from the freeze policy and/or operator algebra.
 - Keep existing operator class enum unchanged.
 
----
+### Normative Rule Text (v1.1)
+
+The following classification rules are **declarative and structural**. They do not
+introduce runtime semantics.
+
+1. **Registry-declared class (authoritative):**
+   - For any operator reference in `(term <operator-ref> <coefficient>)`, the class
+     MUST be taken from the matching operator registry entry `class` field.
+   - The registry `class` value MUST be one of `{U, M, ?, C, I, A}`.
+
+2. **Definition constraints (structural):**
+   - Any symbol defined by `(observer <symbol> ...)` MUST have a registry entry with
+     `class = ?`.
+   - Any symbol defined by `(invariant <symbol> ...)` or `(scheduler <symbol> ...)`
+     MUST have a registry entry with `class = C`.
+
+3. **No inference from usage:**
+   - Operator classes MUST NOT be inferred from usage context. Classification is
+     declarative only (registry entries).
+
+These rules are non-breaking for v1.1 because they specify classification without
+altering grammar or IR schema.
 
 ## Impact Analysis (Required)
 
@@ -98,8 +119,8 @@ N/A (MINOR version).
 
 ## Conformance Implications
 
-- Add checklist and tests for classification rules.
-- Update certification evidence requirements accordingly.
+- Add checklist and tests requiring registry class resolution for all operator references.
+- Update certification evidence to show registry validation and class resolution coverage.
 
 ---
 
@@ -161,18 +182,14 @@ N/A (MINOR version).
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): N/A
   - Stage 7 (Alternatives & Risk): PASS
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any): Provide concrete deterministic classification rules or an
-  appendix that will be frozen with v1.1.
+  - Stage 8 (Decision Readiness): PASS
+- Disposition: Accept
+- Conditions (if any): None.
 - Reference summary: `docs/audit/scr_v1_1_review_summary.md`
 
 ## DECISION (v1.1)
 
-- Decision: Accept with Modifications
-- Status: NOT READY
-- Blocking reason: Classification rules are not yet specified.
+- Decision: Accept
+- Status: READY FOR v1.1 FREEZE
 - Required edits:
-  - Provide deterministic classification rules (minimal, explicit, testable).
   - Update conformance checklist/mapping to include the new rules.
-- Revisit conditions: Accept once rule text is included and reviewed.

@@ -64,12 +64,18 @@ and audits.
 ## Proposed Change
 
 - Remove the bootstrap allowance from `docs/spec/04b_ir_freeze_policy.md`.
-- Replace with deterministic classification rules (to be specified).
-- Explicitly state that `cls` must be defined by classification rules or registry annotations.
+- Replace the defaulting rule with the **operator classification rules** defined in
+  `docs/spec/scr_v1_1_operator_classification_rules.md`.
+- Require that every operator reference resolves to a registry `class` value; if no
+  registry class is available, IR emission MUST fail (no defaulting).
 
 No changes are proposed to `docs/spec/02_bnf.md` or `docs/spec/04_ir_schema.json`.
 
----
+### Removal Conditions (v1.1)
+
+The bootstrap `cls = C` allowance is removed **once** the classification rules are
+adopted in v1.1. From that point, `cls` MUST be explicitly determined by registry
+class resolution, and any unclassified operator reference is invalid for IR emission.
 
 ## Impact Analysis (Required)
 
@@ -161,24 +167,19 @@ N/A (MINOR version).
 - Stage results:
   - Stage 1 (Completeness): PASS
   - Stage 2 (Scope & Authority): PASS
-  - Stage 3 (Compatibility): NEEDS REVISION
+  - Stage 3 (Compatibility): PASS
   - Stage 4 (Impact Analysis): PASS
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): N/A
   - Stage 7 (Alternatives & Risk): PASS
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any): Define deterministic classification rules or explicitly
-  cross-reference the operator-classification SCR and its acceptance.
+  - Stage 8 (Decision Readiness): PASS
+- Disposition: Accept
+- Conditions (if any): None.
 - Reference summary: `docs/audit/scr_v1_1_review_summary.md`
 
 ## DECISION (v1.1)
 
-- Decision: Accept with Modifications
-- Status: NOT READY
-- Blocking reason: Requires deterministic classification rules to replace the
-  bootstrap `cls = C` allowance.
+- Decision: Accept
+- Status: READY FOR v1.1 FREEZE
 - Required edits:
-  - Add or reference concrete classification rules (see operator-classification SCR).
   - Update conformance checklist/mapping to enforce the new rules.
-- Revisit conditions: Accept after classification rules are finalized and approved.
