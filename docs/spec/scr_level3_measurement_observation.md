@@ -61,11 +61,25 @@ visibility, collapse, and auditability.
 
 ## Proposed Change
 
+### Definitions
+
+- **Measurement event:** A scheduler-authorized observation step that may produce
+  outcomes affecting subsequent evolution, subject to declared rules.
+- **Observer:** An entity with declared capabilities permitted to perform or
+  receive observations. See `docs/spec/scr_level3_execution_semantics.md` for
+  observability boundaries.
+- **Capabilities:** Declared permissions that scope what an observer may measure
+  or receive, aligned with scheduler authority in
+  `docs/spec/scr_level3_scheduler_model.md`.
+
 ### Proposed Semantics (Draft)
 
 - Measurements are explicit, scheduler-authorized events.
 - Observers have declared capabilities.
 - Measurements may affect future evolution only via declared rules.
+  Any nondeterministic observation behavior must be declared under
+  `docs/spec/scr_level3_determinism_policy.md`; determinism and replay claims are
+  valid only with a declared scheduler policy.
 
 ### Invariants
 
@@ -190,13 +204,8 @@ Impact statements:
   - Stage 4 (Impact Analysis): PASS
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): PASS
-  - Stage 7 (Alternatives & Risk): PASS
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any):
-  - Add concise definitions for measurement event, observer, and observer
-    capabilities, or explicitly reference the Scheduler Model and Execution
-    Semantics SCRs as the authority for these terms.
-  - Clarify that any nondeterministic observation behavior must be declared
-    under the Level-3 determinism policy to support replay claims.
+- Stage 7 (Alternatives & Risk): PASS
+- Stage 8 (Decision Readiness): PASS
+- Disposition: Ready
+- Conditions (if any): None
 - Reference summary: None
