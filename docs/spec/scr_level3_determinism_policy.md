@@ -61,10 +61,22 @@ nondeterminism.
 
 ## Proposed Change
 
+### Definitions
+
+- **Determinism:** The property that identical inputs and declared scheduler
+  policy yield identical observable outcomes.
+- **Replayability:** The ability to reproduce outcomes by reusing the declared
+  scheduler policy and required nondeterminism disclosures.
+- **Nondeterministic operators:** Declared operators whose outcomes are not
+  fixed by inputs and policy alone.
+
 ### Proposed Policy (Draft)
 
 - Determinism is guaranteed up to declared nondeterministic operators.
 - Scheduler policy must be declared for certification claims.
+  Determinism and replay claims are valid only with a declared scheduler policy
+  and explicit nondeterminism declarations in
+  `docs/spec/scr_level3_measurement_observation.md`.
 
 ---
 
@@ -176,12 +188,7 @@ Impact statements:
   - Stage 5 (Conformance & Certification): PASS
   - Stage 6 (Migration, if breaking): PASS
   - Stage 7 (Alternatives & Risk): PASS
-  - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Accept with Modifications
-- Conditions (if any):
-  - Add a concise Definitions section for determinism, replayability, and
-    nondeterministic operators, or explicitly reference the Scheduler Model
-    and Execution Semantics SCRs as authoritative definitions.
-  - State that determinism claims depend on declared scheduler policy and any
-    nondeterminism declarations in measurement/observation semantics.
+  - Stage 8 (Decision Readiness): PASS
+- Disposition: Ready
+- Conditions (if any): None
 - Reference summary: None
