@@ -181,17 +181,22 @@ Impact statements:
 ## REVIEW RECORD (v2.0)
 
 - Checklist: `docs/spec/00j_scr_review_checklist_v1.md`
-- Review date:
-- Reviewers:
+- Review date: 2026-01-16
+- Reviewers: Codex execution (per user instruction)
 - Stage results:
-  - Stage 1 (Completeness):
-  - Stage 2 (Scope & Authority):
-  - Stage 3 (Compatibility):
-  - Stage 4 (Impact Analysis):
-  - Stage 5 (Conformance & Certification):
-  - Stage 6 (Migration, if breaking):
-  - Stage 7 (Alternatives & Risk):
-  - Stage 8 (Decision Readiness):
-- Disposition:
+  - Stage 1 (Completeness): PASS
+  - Stage 2 (Scope & Authority): PASS
+  - Stage 3 (Compatibility): PASS
+  - Stage 4 (Impact Analysis): PASS
+  - Stage 5 (Conformance & Certification): PASS
+  - Stage 6 (Migration, if breaking): PASS
+  - Stage 7 (Alternatives & Risk): PASS
+  - Stage 8 (Decision Readiness): NEEDS REVISION
+- Disposition: Accept with Modifications
 - Conditions (if any):
-- Reference summary:
+  - Add concise definitions for measurement event, observer, and observer
+    capabilities, or explicitly reference the Scheduler Model and Execution
+    Semantics SCRs as the authority for these terms.
+  - Clarify that any nondeterministic observation behavior must be declared
+    under the Level-3 determinism policy to support replay claims.
+- Reference summary: None
