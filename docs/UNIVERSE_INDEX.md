@@ -55,6 +55,8 @@ conformance, certification, and intake artifacts.
 - SCR: Measurement & Observation — `docs/spec/scr_level3_measurement_observation.md`
 - SCR: Determinism Policy — `docs/spec/scr_level3_determinism_policy.md`
 - v2.0 Freeze Prerequisites: `docs/spec/00m_v2_0_freeze_prerequisites.md`
+- Level-3 Conformance Checklist (v2.0): `docs/spec/00n_conformance_checklist_level3_v2_0.md`
+- Level-3 Conformance Test Mapping (v2.0): `docs/spec/00o_conformance_test_mapping_level3_v2_0.md`
 
 ## Audit & Evidence
 
