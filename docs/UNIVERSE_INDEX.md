@@ -30,6 +30,7 @@ conformance, certification, and intake artifacts.
 
 - Spec Freeze Declaration (v1): `docs/spec/00_spec_freeze_declaration_v1.md`
 - HPL Spec Freeze v1.1: `docs/spec/00_spec_freeze_declaration_v1_1.md`
+- HPL Spec Freeze v2.0: `docs/spec/00_spec_freeze_declaration_v2_0.md`
 - Conformance Checklist (v1): `docs/spec/00b_conformance_checklist_v1.md`
 - Conformance Checklist (v1.1): `docs/spec/00b_conformance_checklist_v1_1.md`
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
@@ -64,3 +65,4 @@ conformance, certification, and intake artifacts.
 - Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
 - HPL v1 -> v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
 - HPL v1.1 -> v2.0 Migration Memo: `docs/audit/hpl_v1_1_to_v2_0_migration_memo.md`
+
