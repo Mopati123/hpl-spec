@@ -30,7 +30,9 @@ conformance, certification, and intake artifacts.
 
 - Spec Freeze Declaration (v1): `docs/spec/00_spec_freeze_declaration_v1.md`
 - Conformance Checklist (v1): `docs/spec/00b_conformance_checklist_v1.md`
+- Conformance Checklist (v1.1): `docs/spec/00b_conformance_checklist_v1_1.md`
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
+- Conformance Test Mapping (v1.1): `docs/spec/00c_conformance_test_mapping_v1_1.md`
 - Certification Report Template (v1): `docs/spec/00d_certification_report_template_v1.md`
 - Implementation Intake Checklist (v1): `docs/spec/00e_implementation_intake_checklist_v1.md`
 - Spec Change Request Template (v1): `docs/spec/00h_spec_change_request_template_v1.md`
