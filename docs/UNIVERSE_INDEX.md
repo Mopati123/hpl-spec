@@ -54,6 +54,7 @@ conformance, certification, and intake artifacts.
 - SCR: Execution Semantics — `docs/spec/scr_level3_execution_semantics.md`
 - SCR: Measurement & Observation — `docs/spec/scr_level3_measurement_observation.md`
 - SCR: Determinism Policy — `docs/spec/scr_level3_determinism_policy.md`
+- v2.0 Freeze Prerequisites: `docs/spec/00m_v2_0_freeze_prerequisites.md`
 
 ## Audit & Evidence
 
