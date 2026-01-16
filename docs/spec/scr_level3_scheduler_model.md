@@ -52,3 +52,28 @@ OUT OF SCOPE:
 
 ## Review Record
 (To be completed)
+
+---
+
+## REVIEW RECORD (v2.0)
+
+- Checklist: `docs/spec/00j_scr_review_checklist_v1.md`
+- Review date: 2026-01-16
+- Reviewers: Codex execution (per user instruction)
+- Stage results:
+  - Stage 1 (Completeness): NEEDS REVISION
+  - Stage 2 (Scope & Authority): PASS
+  - Stage 3 (Compatibility): PASS
+  - Stage 4 (Impact Analysis): NEEDS REVISION
+  - Stage 5 (Conformance & Certification): NEEDS REVISION
+  - Stage 6 (Migration, if breaking): NEEDS REVISION
+  - Stage 7 (Alternatives & Risk): NEEDS REVISION
+  - Stage 8 (Decision Readiness): NEEDS REVISION
+- Disposition: Defer
+- Conditions (if any):
+  - Convert to the standard SCR template.
+  - Add explicit impact statements (IR schema, operator classes, macro boundary).
+  - Add conformance and test-mapping implications.
+  - Add migration strategy (required for v2.0).
+  - Add risks section (determinism guarantees, replay requirements, policy declaration).
+- Reference summary: `docs/audit/scr_v1_1_review_summary.md`
