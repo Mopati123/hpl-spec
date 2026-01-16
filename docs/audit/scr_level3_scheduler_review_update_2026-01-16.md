@@ -3,7 +3,7 @@
 ## Summary
 
 Normalized SCR now passes checklist stages 1-8. The risks section is added and
-reviewed, so disposition is **Accept** and ready for v2.0 review.
+reviewed, so disposition is **Ready** for v2.0 review.
 
 ## Required Edit
 

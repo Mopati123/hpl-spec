@@ -195,6 +195,6 @@ Impact statements:
   - Stage 6 (Migration, if breaking): PASS
   - Stage 7 (Alternatives & Risk): PASS
   - Stage 8 (Decision Readiness): PASS
-- Disposition: Accept
+- Disposition: Ready
 - Conditions (if any): None.
 - Reference summary: `docs/audit/scr_level3_scheduler_review_update_2026-01-16.md`
