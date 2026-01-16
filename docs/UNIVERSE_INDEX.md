@@ -37,9 +37,14 @@ conformance, certification, and intake artifacts.
 - Spec v1.1 Roadmap Skeleton (Informational): `docs/spec/00i_spec_v1_1_roadmap_skeleton.md`
 - v1 Compliance Memo: `docs/audit/hpl_v1_compliance_memo.md`
 - Level-2 Tooling Track Plan (Informational): `docs/spec/level2_tooling_track_plan.md`
+ - Diagnostics Error Taxonomy (Informational): `docs/spec/diagnostics_error_taxonomy_v1.md`
 
 ## Future Evolution (Informational)
 
 - SCR: Remove bootstrap cls=C: `docs/spec/scr_v1_1_remove_bootstrap_cls_c.md`
 - SCR: Operator classification rules: `docs/spec/scr_v1_1_operator_classification_rules.md`
 - SCR: IR invariants clarification: `docs/spec/scr_v1_1_ir_invariants_clarification.md`
+
+## Audit & Evidence
+
+- L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
