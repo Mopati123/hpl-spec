@@ -67,3 +67,8 @@ conformance, certification, and intake artifacts.
 - HPL v1 -> v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
 - HPL v1.1 -> v2.0 Migration Memo: `docs/audit/hpl_v1_1_to_v2_0_migration_memo.md`
 
+
+## Certification Examples
+
+- Level-3 Certification Walkthrough Note: `docs/audit/level3_certification_walkthrough_2026-01-16.md`
+- Level-3 Certification Walkthrough: `docs/audit/example_level3_certification_walkthrough.md`
