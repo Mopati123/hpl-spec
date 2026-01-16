@@ -171,19 +171,16 @@ Impact statements:
 - Review date: 2026-01-16
 - Reviewers: Codex execution (per user instruction)
 - Stage results:
-  - Stage 1 (Completeness): NEEDS REVISION
+  - Stage 1 (Completeness): PASS
   - Stage 2 (Scope & Authority): PASS
   - Stage 3 (Compatibility): PASS
-  - Stage 4 (Impact Analysis): NEEDS REVISION
-  - Stage 5 (Conformance & Certification): NEEDS REVISION
-  - Stage 6 (Migration, if breaking): NEEDS REVISION
+  - Stage 4 (Impact Analysis): PASS
+  - Stage 5 (Conformance & Certification): PASS
+  - Stage 6 (Migration, if breaking): PASS
   - Stage 7 (Alternatives & Risk): NEEDS REVISION
   - Stage 8 (Decision Readiness): NEEDS REVISION
-- Disposition: Defer
+- Disposition: Accept with Modifications
 - Conditions (if any):
-  - Convert to the standard SCR template.
-  - Add explicit impact statements (IR schema, operator classes, macro boundary).
-  - Add conformance and test-mapping implications.
-  - Add migration strategy (required for v2.0).
-  - Add risks section (determinism guarantees, replay requirements, policy declaration).
-- Reference summary: `docs/audit/scr_v1_1_review_summary.md`
+  - Add a Risks section acknowledging determinism/replay guarantees and scheduler
+    policy declaration risks.
+- Reference summary: `docs/audit/scr_level3_scheduler_review_update_2026-01-16.md`
