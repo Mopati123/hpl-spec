@@ -166,3 +166,13 @@ N/A (MINOR version).
 - Conditions (if any): Provide concrete deterministic classification rules or an
   appendix that will be frozen with v1.1.
 - Reference summary: `docs/audit/scr_v1_1_review_summary.md`
+
+## DECISION (v1.1)
+
+- Decision: Accept with Modifications
+- Status: NOT READY
+- Blocking reason: Classification rules are not yet specified.
+- Required edits:
+  - Provide deterministic classification rules (minimal, explicit, testable).
+  - Update conformance checklist/mapping to include the new rules.
+- Revisit conditions: Accept once rule text is included and reviewed.

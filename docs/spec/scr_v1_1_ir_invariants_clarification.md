@@ -165,3 +165,11 @@ N/A (Clarification only).
 - Disposition: Accept
 - Conditions (if any): None.
 - Reference summary: `docs/audit/scr_v1_1_review_summary.md`
+
+## DECISION (v1.1)
+
+- Decision: Accept
+- Status: READY FOR v1.1 FREEZE
+- Required edits:
+  - Add clarifying note for invariants under v1.1 (non-schema change).
+  - Update checklist references only if a new note is added.

@@ -171,3 +171,14 @@ N/A (MINOR version).
 - Conditions (if any): Define deterministic classification rules or explicitly
   cross-reference the operator-classification SCR and its acceptance.
 - Reference summary: `docs/audit/scr_v1_1_review_summary.md`
+
+## DECISION (v1.1)
+
+- Decision: Accept with Modifications
+- Status: NOT READY
+- Blocking reason: Requires deterministic classification rules to replace the
+  bootstrap `cls = C` allowance.
+- Required edits:
+  - Add or reference concrete classification rules (see operator-classification SCR).
+  - Update conformance checklist/mapping to enforce the new rules.
+- Revisit conditions: Accept after classification rules are finalized and approved.
