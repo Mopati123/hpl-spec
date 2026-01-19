@@ -1,0 +1,11 @@
+{
+  "sub_hamiltonian": "test_H",
+  "version": "0.1.0",
+  "operators": [
+    {
+      "id": "OP_TEST",
+      "class": "C",
+      "impl_ref": "hpl.test.op"
+    }
+  ]
+}
