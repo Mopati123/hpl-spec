@@ -68,6 +68,7 @@ conformance, certification, and intake artifacts.
 - HPL v1.1 -> v2.0 Migration Memo: `docs/audit/hpl_v1_1_to_v2_0_migration_memo.md`
 
 
+- Level-3 Requirements Matrix (v2.0): `docs/audit/level3_requirements_matrix_v2_0.md`
 ## Certification Examples
 
 - Level-3 Certification Walkthrough Note: `docs/audit/level3_certification_walkthrough_2026-01-16.md`
