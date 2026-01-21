@@ -31,6 +31,7 @@ conformance, certification, and intake artifacts.
 - Spec Freeze Declaration (v1): `docs/spec/00_spec_freeze_declaration_v1.md`
 - HPL Spec Freeze v1.1: `docs/spec/00_spec_freeze_declaration_v1_1.md`
 - HPL Spec Freeze v2.0: `docs/spec/00_spec_freeze_declaration_v2_0.md`
+- HPL Spec Freeze v2.1: `docs/spec/00_spec_freeze_declaration_v2_1.md`
 - Conformance Checklist (v1): `docs/spec/00b_conformance_checklist_v1.md`
 - Conformance Checklist (v1.1): `docs/spec/00b_conformance_checklist_v1_1.md`
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
@@ -45,6 +46,7 @@ conformance, certification, and intake artifacts.
 - Diagnostics Error Taxonomy (Informational): `docs/spec/diagnostics_error_taxonomy_v1.md`
 
 ## Future Evolution (Informational)
+- SCR: Papas Observer Identity (v2.1): `docs/spec/scr_v2_1_papas_observer.md`
 
 - SCR: Remove bootstrap cls=C: `docs/spec/scr_v1_1_remove_bootstrap_cls_c.md`
 - SCR: Operator classification rules: `docs/spec/scr_v1_1_operator_classification_rules.md`

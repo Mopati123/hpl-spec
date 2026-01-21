@@ -1,0 +1,26 @@
+{
+  "schema_version": "2.1",
+  "observers": [
+    {
+      "id": "papas",
+      "kind": "internal_observer",
+      "roles": [
+        "reasoning_trace_generator",
+        "math_mentor",
+        "audit_witness"
+      ],
+      "permissions": {
+        "can_observe": true,
+        "can_emit_trace": true,
+        "can_emit_witness_attestation": true,
+        "can_explain": true
+      },
+      "prohibitions": {
+        "can_authorize_collapse": false,
+        "can_execute_runtime": false,
+        "can_define_semantics": false,
+        "can_override_invariants": false
+      }
+    }
+  ]
+}

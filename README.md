@@ -1,16 +1,25 @@
-# hpl_spec ? HPL (Spec-Only Universe)
+# hpl-spec - HPL Specification and Governance
 
-This repository is intentionally **spec-only**:
-- The top-level `_H` folders are **sub-Hamiltonians** containing operator registries and canonical documentation.
-- No executable code has been written yet.
-- Implementation will be generated later once the spec is frozen.
+This repository is the canonical, frozen specification and governance source
+for Hamiltonian Programming Language (HPL) v1 -> v2.1. It is spec-first, with a
+partial reference implementation for the Level-1 pipeline and Level-2 tooling.
 
-## Why spec-only?
-To prevent semantic drift: the law is authored and reviewed first.
-After freeze, Codex (or your team) implements against these specs.
+## What this repo contains
 
-## Next step
-Paste the full conversation into Codex and instruct it to:
-- validate coherence across specs
-- propose missing definitions
-- avoid writing executable code
+- Spec law and governance artifacts (freeze declarations, SCRs, checklists)
+- Sub-Hamiltonians (`*_H`) that define the ontology and constraints
+- Level-1 front-end pipeline (parser -> macro -> validator -> IR)
+- Level-2 tooling (registry validation, traceability, diagnostics)
+
+## What this repo does NOT contain
+
+- No runtime execution engine or scheduler implementation
+- No backend execution runtime
+
+## Quick navigation
+
+- `docs/spec/`: normative specs and freezes
+- `docs/audit/`: audit artifacts and walkthroughs
+- `docs/publish/`: external overviews
+- `src/hpl/`: partial reference implementation (Level-1 + Level-2)
+- `_H` folders: spec-only sub-Hamiltonians

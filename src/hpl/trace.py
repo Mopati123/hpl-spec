@@ -114,3 +114,26 @@ def _iter_with_path(node: Node, path: List[int]) -> Iterable[Tuple[Node, List[in
     if node.is_list:
         for idx, child in enumerate(node.as_list()):
             yield from _iter_with_path(child, path + [idx])
+from __future__ import annotations
+
+from typing import Dict, Optional
+
+
+def emit_witness_record(
+    observer_id: str,
+    stage: str,
+    artifact_digests: Dict[str, str],
+    timestamp: str,
+    attestation: str,
+    notes: Optional[str] = None,
+) -> Dict[str, object]:
+    record: Dict[str, object] = {
+        "observer_id": observer_id,
+        "stage": stage,
+        "artifact_digests": dict(artifact_digests),
+        "timestamp": timestamp,
+        "attestation": attestation,
+    }
+    if notes:
+        record["notes"] = notes
+    return record

@@ -1,0 +1,21 @@
+{
+  "schema_version": "2.1",
+  "WitnessRecord": {
+    "type": "object",
+    "required": ["observer_id", "stage", "artifact_digests", "timestamp", "attestation"],
+    "properties": {
+      "observer_id": { "type": "string", "enum": ["papas"] },
+      "stage": {
+        "type": "string",
+        "enum": ["parse", "expand", "validate", "ir_emit", "schedule", "lower"]
+      },
+      "artifact_digests": {
+        "type": "object",
+        "additionalProperties": { "type": "string" }
+      },
+      "timestamp": { "type": "string" },
+      "attestation": { "type": "string" },
+      "notes": { "type": "string" }
+    }
+  }
+}

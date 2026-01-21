@@ -29,3 +29,4 @@ jobs:
         run: python -m unittest tests/test_diagnostics.py
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
+
