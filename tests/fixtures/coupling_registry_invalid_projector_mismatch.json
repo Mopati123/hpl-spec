@@ -1,0 +1,20 @@
+{
+  "projectors": [
+    {
+      "id": "sector.alpha.projector",
+      "domain": ["AlphaIn"],
+      "codomain": ["AlphaOut"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge.alpha.beta",
+      "projector": "sector.alpha.projector",
+      "domain": ["AlphaIn"],
+      "codomain": ["MismatchOut"],
+      "audit": {
+        "requires": ["CouplingEvent"]
+      }
+    }
+  ]
+}

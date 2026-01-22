@@ -23,6 +23,10 @@ jobs:
         run: python tools/ci_gate_prohibited_behavior.py
       - name: Gate L2-A - Registry Validation
         run: python tools/validate_operator_registries.py
+      - name: Gate L2-D - Coupling Topology
+        run: python tools/validate_coupling_topology.py tests/fixtures/coupling_registry_valid.json
+      - name: Gate L2-D Tests - Coupling Topology
+        run: python -m unittest tests/test_coupling_topology_validator.py
       - name: Gate L2-B - Traceability
         run: python -m unittest tests/test_traceability.py
       - name: Gate L2-C - Diagnostics

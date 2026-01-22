@@ -1,0 +1,25 @@
+{
+  "projectors": [
+    {
+      "id": "sector.alpha.projector",
+      "domain": ["AlphaIn"],
+      "codomain": ["AlphaOut"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge.alpha.beta",
+      "projector": "sector.alpha.projector",
+      "domain": ["AlphaIn"],
+      "codomain": ["AlphaOut"],
+      "audit": {
+        "requires": ["CouplingEvent"]
+      }
+    }
+  ],
+  "invocations": [
+    {
+      "edge_id": "edge.missing"
+    }
+  ]
+}
