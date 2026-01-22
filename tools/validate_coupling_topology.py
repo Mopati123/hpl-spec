@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-
 ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+from hpl.audit.coupling_event import build_coupling_event_from_registry, write_event_json
+
 
 DEFERRED_NOTES = [
     "Rule V1 (illegal cross-sector bypass detection) is deferred in this validator.",
@@ -14,12 +20,15 @@ DEFERRED_NOTES = [
 
 
 def main() -> int:
-    paths = _resolve_paths(sys.argv[1:])
+    args = _parse_args()
     results = []
     all_ok = True
 
-    for path in paths:
-        errors = validate_coupling_registry_file(path)
+    for path in args.registry_paths:
+        registry, load_errors = _load_registry(path)
+        errors = list(load_errors)
+        if registry:
+            errors.extend(validate_coupling_registry_data(registry))
         ok = not errors
         all_ok = all_ok and ok
         results.append({"path": str(path), "ok": ok, "errors": errors})
@@ -27,6 +36,9 @@ def main() -> int:
         print(f"{status}: {path}")
         for err in errors:
             print(f"  - {err}")
+
+        if ok and registry:
+            _emit_event_if_requested(registry, path, args)
 
     for note in DEFERRED_NOTES:
         print(f"NOTE: {note}")
@@ -36,24 +48,65 @@ def main() -> int:
     return 0 if all_ok else 1
 
 
-def _resolve_paths(args: List[str]) -> List[Path]:
-    if not args:
-        raise SystemExit("Provide one or more coupling registry paths to validate.")
-    return [Path(arg).resolve() for arg in args]
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate coupling topology registries.")
+    parser.add_argument("registry_paths", nargs="+", type=Path)
+    parser.add_argument("--emit-event", type=Path, help="Write a CouplingEvent artifact.")
+    parser.add_argument(
+        "--emit-event-dir",
+        type=Path,
+        help="Write CouplingEvent artifacts into a directory.",
+    )
+    parser.add_argument("--timestamp", default=None, help="Deterministic timestamp override.")
+    return parser.parse_args()
 
 
-def validate_coupling_registry_file(path: Path) -> List[str]:
-    errors: List[str] = []
+def _emit_event_if_requested(registry: Dict[str, object], path: Path, args: argparse.Namespace) -> None:
+    if args.emit_event and args.emit_event_dir:
+        raise SystemExit("Use only one of --emit-event or --emit-event-dir.")
+    if not args.emit_event and not args.emit_event_dir:
+        return
+
+    bundle = build_coupling_event_from_registry(
+        registry,
+        timestamp=args.timestamp or None,
+    )
+
+    if args.emit_event:
+        target = args.emit_event
+        write_event_json(bundle.event, target)
+        return
+
+    if args.emit_event_dir:
+        args.emit_event_dir.mkdir(parents=True, exist_ok=True)
+        target = args.emit_event_dir / f"{path.stem}.coupling_event.json"
+        write_event_json(bundle.event, target)
+
+
+def _load_registry(path: Path) -> Tuple[Dict[str, object] | None, List[str]]:
     if not path.exists():
-        return [f"Coupling registry not found: {path}"]
+        return None, [f"Coupling registry not found: {path}"]
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        return [f"Invalid JSON: {exc}"]
+        return None, [f"Invalid JSON: {exc}"]
 
     if not isinstance(data, dict):
-        return ["Coupling registry: expected object at root"]
+        return None, ["Coupling registry: expected object at root"]
+
+    return data, []
+
+
+def validate_coupling_registry_file(path: Path) -> List[str]:
+    registry, errors = _load_registry(path)
+    if registry:
+        errors.extend(validate_coupling_registry_data(registry))
+    return errors
+
+
+def validate_coupling_registry_data(data: Dict[str, object]) -> List[str]:
+    errors: List[str] = []
 
     projectors, projector_errors = _load_projectors(data)
     errors.extend(projector_errors)

@@ -2,6 +2,7 @@
   "projectors": [
     {
       "id": "sector.alpha.projector",
+      "version": "1.0",
       "domain": ["AlphaIn"],
       "codomain": ["AlphaOut"]
     }
@@ -9,6 +10,10 @@
   "edges": [
     {
       "id": "edge.alpha.beta",
+      "sector_src": "sector.alpha",
+      "sector_dst": "sector.beta",
+      "operator_name": "CoupleAlphaBeta",
+      "symmetric_capable": true,
       "projector": "sector.alpha.projector",
       "domain": ["AlphaIn"],
       "codomain": ["AlphaOut"],
