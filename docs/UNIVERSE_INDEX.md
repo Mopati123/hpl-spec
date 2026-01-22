@@ -33,6 +33,9 @@ conformance, certification, and intake artifacts.
 - HPL Spec Freeze v2.0: `docs/spec/00_spec_freeze_declaration_v2_0.md`
 - HPL Spec Freeze v2.1: `docs/spec/00_spec_freeze_declaration_v2_1.md`
 - HPL Spec Freeze v2.2: `docs/spec/00_spec_freeze_declaration_v2_2.md`
+- HPL Spec Freeze v2.4: `docs/spec/00_spec_freeze_declaration_v2_4.md`
+- SCR v2.4 Tech Stack + Quantum Proof Semantics: `docs/spec/scr_v2_4_tech_stack_quantum_proof_semantics.md`
+- Tech Stack + Quantum Proof Semantics (v2.4): `docs/spec/11_tech_stack_quantum_proof_semantics.md`
 - Conformance Checklist (v1): `docs/spec/00b_conformance_checklist_v1.md`
 - Conformance Checklist (v1.1): `docs/spec/00b_conformance_checklist_v1_1.md`
 - Conformance Test Mapping (v1): `docs/spec/00c_conformance_test_mapping_v1.md`
@@ -82,3 +85,4 @@ conformance, certification, and intake artifacts.
 
 - HPL v1 -> v2.0 Evolution Overview (External): `docs/publish/hpl_v1_to_v2_0_evolution_overview.md`
 - HPL Codebase Overview: `docs/publish/hpl_codebase_overview.md`
+
