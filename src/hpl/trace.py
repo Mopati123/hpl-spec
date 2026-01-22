@@ -114,10 +114,6 @@ def _iter_with_path(node: Node, path: List[int]) -> Iterable[Tuple[Node, List[in
     if node.is_list:
         for idx, child in enumerate(node.as_list()):
             yield from _iter_with_path(child, path + [idx])
-from __future__ import annotations
-
-from typing import Dict, Optional
-
 
 def emit_witness_record(
     observer_id: str,
