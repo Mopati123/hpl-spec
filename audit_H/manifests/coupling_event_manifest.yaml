@@ -1,0 +1,47 @@
+schema_version: "2.2"
+CouplingEvent:
+  type: object
+  required:
+    - event_id
+    - timestamp
+    - edge_id
+    - sector_src
+    - sector_dst
+    - operator_name
+    - input_digest
+    - output_digest
+    - invariants_checked
+    - scheduler_authorization_ref
+    - projector_versions
+    - evidence_artifacts
+  properties:
+    event_id:
+      type: string
+    timestamp:
+      type: string
+    edge_id:
+      type: string
+    sector_src:
+      type: string
+    sector_dst:
+      type: string
+    operator_name:
+      type: string
+    input_digest:
+      type: string
+    output_digest:
+      type: string
+    invariants_checked:
+      type: array
+      items:
+        type: string
+    scheduler_authorization_ref:
+      type: string
+    projector_versions:
+      type: object
+      additionalProperties:
+        type: string
+    evidence_artifacts:
+      type: object
+      additionalProperties:
+        type: string
