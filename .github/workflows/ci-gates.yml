@@ -31,6 +31,12 @@ jobs:
         run: python -m unittest tests/test_traceability.py
       - name: Gate L2-C - Diagnostics
         run: python -m unittest tests/test_diagnostics.py
+      - name: Epoch Anchor - Generate
+        run: |
+          mkdir -p artifacts
+          python tools/anchor_epoch.py --epoch-id ci --output artifacts/epoch_ci.anchor.json
+      - name: Epoch Anchor - Verify
+        run: python tools/verify_epoch.py artifacts/epoch_ci.anchor.json
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
 
