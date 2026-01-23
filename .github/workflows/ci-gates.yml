@@ -37,6 +37,12 @@ jobs:
           python tools/anchor_epoch.py --epoch-id ci --output artifacts/epoch_ci.anchor.json
       - name: Epoch Anchor - Verify
         run: python tools/verify_epoch.py artifacts/epoch_ci.anchor.json
+      - name: Epoch Anchor - Sign
+        env:
+          HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
+        run: python tools/sign_anchor.py artifacts/epoch_ci.anchor.json --signature-out artifacts/epoch_ci.anchor.sig
+      - name: Epoch Anchor - Verify Signature
+        run: python tools/verify_anchor_signature.py artifacts/epoch_ci.anchor.json artifacts/epoch_ci.anchor.sig --public-key config/keys/ci_ed25519.pub
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
 
