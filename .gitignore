@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+HPL_CI_ED25519_PRIVATE_KEY*.txt
