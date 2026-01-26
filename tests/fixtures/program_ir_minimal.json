@@ -1,0 +1,34 @@
+{
+  "program_id": "program_minimal",
+  "hamiltonian": {
+    "terms": [
+      {
+        "operator_id": "SURF_U",
+        "cls": "U",
+        "coefficient": 0.5
+      },
+      {
+        "operator_id": "SURF_M",
+        "cls": "M",
+        "coefficient": 1.0
+      }
+    ]
+  },
+  "operators": {
+    "SURF_U": {
+      "type": "unspecified",
+      "commutes_with": [],
+      "backend_map": []
+    },
+    "SURF_M": {
+      "type": "unspecified",
+      "commutes_with": [],
+      "backend_map": []
+    }
+  },
+  "invariants": [],
+  "scheduler": {
+    "collapse_policy": "unspecified",
+    "authorized_observers": []
+  }
+}
