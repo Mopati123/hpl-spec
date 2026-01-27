@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -22,7 +24,9 @@ from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
 
 
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PUBLIC_KEY = Path("config/keys/ci_ed25519.pub")
+BUNDLE_EVIDENCE_PATH = ROOT / "tools" / "bundle_evidence.py"
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -54,6 +58,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     lower_parser.add_argument("--ir", type=Path, required=True)
     lower_parser.add_argument("--out", type=Path, required=True)
 
+    bundle_parser = subparsers.add_parser("bundle")
+    bundle_parser.add_argument("--out-dir", type=Path, required=True)
+    bundle_parser.add_argument("--program-ir", type=Path)
+    bundle_parser.add_argument("--plan", type=Path)
+    bundle_parser.add_argument("--runtime-result", type=Path)
+    bundle_parser.add_argument("--backend-ir", type=Path)
+    bundle_parser.add_argument("--qasm", type=Path)
+    bundle_parser.add_argument("--epoch-anchor", type=Path)
+    bundle_parser.add_argument("--epoch-sig", type=Path)
+    bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
+    bundle_parser.add_argument("--quantum-semantics-v1", action="store_true")
+
+    lifecycle_parser = subparsers.add_parser("lifecycle")
+    lifecycle_parser.add_argument("input", type=Path)
+    lifecycle_parser.add_argument("--backend", choices=["classical", "qasm"], required=True)
+    lifecycle_parser.add_argument("--out-dir", type=Path, required=True)
+    lifecycle_parser.add_argument("--require-epoch", action="store_true")
+    lifecycle_parser.add_argument("--anchor", type=Path)
+    lifecycle_parser.add_argument("--sig", type=Path)
+    lifecycle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
+
     args = parser.parse_args(argv)
 
     try:
@@ -65,6 +92,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_run(args)
         if args.command == "lower":
             return _cmd_lower(args)
+        if args.command == "bundle":
+            return _cmd_bundle(args)
+        if args.command == "lifecycle":
+            return _cmd_lifecycle(args)
     except HplError as exc:
         _write_refusal_evidence(
             command=args.command,
@@ -180,6 +211,290 @@ def _cmd_lower(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_bundle(args: argparse.Namespace) -> int:
+    bundle_module = _load_bundle_module()
+    errors: List[str] = []
+    artifacts: List[object] = []
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    def add_artifact(role: str, path: Optional[Path]) -> None:
+        if not path:
+            return
+        if not path.exists():
+            errors.append(f"{role} not found: {path}")
+            return
+        artifacts.append(bundle_module._artifact(role, path))
+
+    add_artifact("program_ir", args.program_ir)
+    add_artifact("plan", args.plan)
+    add_artifact("runtime_result", args.runtime_result)
+    add_artifact("backend_ir", args.backend_ir)
+    add_artifact("qasm", args.qasm)
+    add_artifact("epoch_anchor", args.epoch_anchor)
+    add_artifact("epoch_sig", args.epoch_sig)
+
+    extras = sorted(args.extra or [], key=lambda p: str(p))
+    for idx, path in enumerate(extras):
+        add_artifact(f"extra_{idx}", path)
+
+    if errors or not artifacts:
+        summary = {
+            "ok": False,
+            "bundle_path": None,
+            "bundle_id": None,
+            "errors": errors or ["no artifacts provided"],
+        }
+        evidence_path = args.out_dir / "bundle_evidence.json"
+        _write_evidence(
+            evidence_path,
+            command="bundle",
+            ok=False,
+            errors=summary["errors"],
+            inputs={},
+            outputs={},
+        )
+        print(_canonical_json(summary))
+        return 0
+
+    bundle_dir, manifest = bundle_module.build_bundle(
+        out_dir=args.out_dir,
+        artifacts=artifacts,
+        epoch_anchor=args.epoch_anchor,
+        epoch_sig=args.epoch_sig,
+        public_key=args.pub,
+        quantum_semantics_v1=args.quantum_semantics_v1,
+    )
+    manifest_path = bundle_dir / "bundle_manifest.json"
+    manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+    quantum_errors: List[str] = []
+    ok = True
+    if args.quantum_semantics_v1:
+        quantum = manifest.get("quantum_semantics_v1", {})
+        ok = bool(quantum.get("ok", False))
+        if not ok:
+            quantum_errors.append("quantum semantics roles incomplete")
+            missing_required = quantum.get("missing_required", [])
+            if missing_required:
+                quantum_errors.append(f"missing_required={','.join(missing_required)}")
+            if not quantum.get("projection_present"):
+                quantum_errors.append("missing backend projection")
+
+    evidence_inputs = {item.role: _digest_file(item.source) for item in artifacts}
+    evidence_path = args.out_dir / "bundle_evidence.json"
+    _write_evidence(
+        evidence_path,
+        command="bundle",
+        ok=ok,
+        errors=quantum_errors,
+        inputs=evidence_inputs,
+        outputs={"bundle_manifest": _digest_file(manifest_path)},
+    )
+
+    summary = {
+        "ok": ok,
+        "bundle_path": str(bundle_dir),
+        "bundle_id": manifest.get("bundle_id"),
+        "errors": quantum_errors,
+    }
+    print(_canonical_json(summary))
+    return 0
+
+
+def _cmd_lifecycle(args: argparse.Namespace) -> int:
+    out_dir = args.out_dir
+    work_dir = out_dir / "work"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    program_ir_path = work_dir / "program.ir.json"
+    plan_path = work_dir / "plan.json"
+    runtime_path = work_dir / "runtime.json"
+    backend_ir_path = work_dir / "backend.ir.json"
+    qasm_path = work_dir / "program.qasm"
+
+    try:
+        # IR
+        program = parse_file(str(args.input))
+        expanded = expand_program(program)
+        validate_program(expanded)
+        program_ir = emit_program_ir(expanded, program_id=args.input.stem)
+        _write_json(program_ir_path, program_ir)
+        _write_evidence(
+            work_dir / "ir_evidence.json",
+            command="ir",
+            ok=True,
+            errors=[],
+            inputs={"input": _digest_file(args.input)},
+            outputs={"program_ir": _digest_file(program_ir_path)},
+        )
+
+        # Plan
+        ctx = SchedulerContext(
+            require_epoch_verification=args.require_epoch,
+            anchor_path=args.anchor,
+            signature_path=args.sig,
+            public_key_path=args.pub,
+        )
+        plan_obj = plan_program(program_ir, ctx)
+        plan_dict = plan_obj.to_dict()
+        _write_json(plan_path, plan_dict)
+        plan_ok = plan_obj.status == "planned"
+        plan_errors = list(plan_obj.reasons)
+        _write_evidence(
+            work_dir / "plan_evidence.json",
+            command="plan",
+            ok=plan_ok,
+            errors=plan_errors,
+            inputs={"program_ir": _digest_file(program_ir_path)},
+            outputs={"plan": _digest_file(plan_path)},
+        )
+
+        # Runtime
+        runtime_ctx = RuntimeContext(
+            epoch_anchor_path=args.anchor,
+            epoch_sig_path=args.sig,
+            ci_pubkey_path=args.pub,
+        )
+        allowed_steps = {
+            str(step.get("operator_id"))
+            for step in plan_dict.get("steps", [])
+            if isinstance(step, dict)
+        }
+        contract = ExecutionContract(
+            allowed_steps=allowed_steps,
+            require_epoch_verification=args.require_epoch,
+            require_signature_verification=bool(args.sig) if args.require_epoch else False,
+        )
+        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        runtime_dict = runtime_result.to_dict()
+        _write_json(runtime_path, runtime_dict)
+        run_ok = runtime_result.status == "completed"
+        _write_evidence(
+            work_dir / "run_evidence.json",
+            command="run",
+            ok=run_ok,
+            errors=list(runtime_result.reasons),
+            inputs={"plan": _digest_file(plan_path)},
+            outputs={"runtime_result": _digest_file(runtime_path)},
+        )
+
+        # Lower
+        backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
+        _write_json(backend_ir_path, backend_ir)
+        output_digests = {"backend_ir": _digest_text_value(_canonical_json(backend_ir))}
+        if args.backend == "qasm":
+            qasm = lower_backend_ir_to_qasm(backend_ir)
+            qasm_path.write_text(qasm, encoding="utf-8")
+            output_digests["qasm"] = _digest_text_value(qasm)
+        _write_evidence(
+            work_dir / "lower_evidence.json",
+            command="lower",
+            ok=True,
+            errors=[],
+            inputs={"program_ir": _digest_file(program_ir_path)},
+            outputs=output_digests,
+        )
+
+        # Bundle
+        bundle_module = _load_bundle_module()
+        artifacts = [
+            bundle_module._artifact("program_ir", program_ir_path),
+            bundle_module._artifact("plan", plan_path),
+            bundle_module._artifact("runtime_result", runtime_path),
+            bundle_module._artifact("backend_ir", backend_ir_path),
+        ]
+        if args.backend == "qasm":
+            artifacts.append(bundle_module._artifact("qasm", qasm_path))
+        bundle_errors: List[str] = []
+        if args.anchor:
+            if args.anchor.exists():
+                artifacts.append(bundle_module._artifact("epoch_anchor", args.anchor))
+            else:
+                bundle_errors.append(f"anchor not found: {args.anchor}")
+        if args.sig:
+            if args.sig.exists():
+                artifacts.append(bundle_module._artifact("epoch_sig", args.sig))
+            else:
+                bundle_errors.append(f"signature not found: {args.sig}")
+
+        anchor_for_bundle = args.anchor if args.anchor and args.anchor.exists() else None
+        sig_for_bundle = args.sig if args.sig and args.sig.exists() else None
+
+        bundle_dir, manifest = bundle_module.build_bundle(
+            out_dir=out_dir,
+            artifacts=artifacts,
+            epoch_anchor=anchor_for_bundle,
+            epoch_sig=sig_for_bundle,
+            public_key=args.pub,
+            quantum_semantics_v1=args.quantum_semantics_v1,
+        )
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+        errors: List[str] = []
+        ok = plan_ok and run_ok
+        if plan_errors:
+            errors.extend(plan_errors)
+        if runtime_result.reasons:
+            errors.extend(runtime_result.reasons)
+        if bundle_errors:
+            ok = False
+            errors.extend(bundle_errors)
+
+        if args.quantum_semantics_v1:
+            quantum = manifest.get("quantum_semantics_v1", {})
+            if not quantum.get("ok", False):
+                ok = False
+                errors.append("quantum semantics roles incomplete")
+                missing_required = quantum.get("missing_required", [])
+                if missing_required:
+                    errors.append(f"missing_required={','.join(missing_required)}")
+                if not quantum.get("projection_present"):
+                    errors.append("missing backend projection")
+
+        _write_evidence(
+            out_dir / "lifecycle_evidence.json",
+            command="lifecycle",
+            ok=ok,
+            errors=errors,
+            inputs={"input": _digest_file(args.input)},
+            outputs={"bundle_manifest": _digest_file(manifest_path)},
+        )
+
+        summary = {
+            "ok": ok,
+            "bundle_path": str(bundle_dir),
+            "bundle_id": manifest.get("bundle_id"),
+            "errors": errors,
+            "denied_reason": None if ok else "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+    except HplError as exc:
+        errors = [str(exc)]
+        _write_evidence(
+            out_dir / "lifecycle_evidence.json",
+            command="lifecycle",
+            ok=False,
+            errors=errors,
+            inputs={"input": _digest_file(args.input)} if args.input.exists() else {},
+            outputs={},
+        )
+        summary = {
+            "ok": False,
+            "bundle_path": None,
+            "bundle_id": None,
+            "errors": errors,
+            "denied_reason": "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+
+
 def _load_contract(contract_path: Optional[Path], plan_dict: Dict[str, object]) -> ExecutionContract:
     if contract_path and contract_path.exists():
         data = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -193,6 +508,14 @@ def _load_contract(contract_path: Optional[Path], plan_dict: Dict[str, object]) 
     plan_steps = plan_dict.get("steps", [])
     allowed = {str(step.get("operator_id")) for step in plan_steps if isinstance(step, dict)}
     return ExecutionContract(allowed_steps=allowed)
+
+
+def _load_bundle_module():
+    spec = importlib.util.spec_from_file_location("bundle_evidence", BUNDLE_EVIDENCE_PATH)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _write_json(path: Path, payload: Dict[str, object]) -> None:
