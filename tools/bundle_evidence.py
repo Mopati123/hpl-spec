@@ -5,15 +5,19 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools import verify_epoch
 from tools import verify_anchor_signature
 
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PUBLIC_KEY = ROOT / "config" / "keys" / "ci_ed25519.pub"
 
 
@@ -34,10 +38,15 @@ def main() -> int:
         epoch_anchor=args.epoch_anchor,
         epoch_sig=args.epoch_sig,
         public_key=args.pub,
+        quantum_semantics_v1=args.quantum_semantics_v1,
     )
     manifest_path = bundle_dir / "bundle_manifest.json"
     manifest_path.write_text(_canonical_json(manifest), encoding="utf-8")
-    return 0
+    quantum_ok = True
+    quantum_section = manifest.get("quantum_semantics_v1")
+    if isinstance(quantum_section, dict):
+        quantum_ok = bool(quantum_section.get("ok", True))
+    return 0 if quantum_ok else 1
 
 
 def build_bundle(
@@ -46,6 +55,7 @@ def build_bundle(
     epoch_anchor: Optional[Path],
     epoch_sig: Optional[Path],
     public_key: Optional[Path],
+    quantum_semantics_v1: bool = False,
 ) -> Tuple[Path, Dict[str, object]]:
     if not artifacts:
         raise ValueError("no artifacts provided")
@@ -60,7 +70,7 @@ def build_bundle(
     git_commit = _git_commit()
     verification = _verify_epoch_and_signature(epoch_anchor, epoch_sig, public_key, git_commit)
 
-    manifest = {
+    manifest: Dict[str, object] = {
         "bundle_id": bundle_id,
         "git_commit": git_commit,
         "verification": verification,
@@ -73,6 +83,10 @@ def build_bundle(
             for artifact in artifacts
         ],
     }
+
+    if quantum_semantics_v1:
+        manifest["quantum_semantics_v1"] = _quantum_semantics_section(artifacts)
+        manifest["quantum_semantics_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
     return bundle_dir, manifest
 
@@ -114,6 +128,26 @@ def _bundle_id(artifacts: List[Artifact]) -> str:
         for artifact in artifacts
     ]
     return _digest_hex(_canonical_json(core))
+
+
+def _quantum_semantics_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    required_roles = ["program_ir", "plan", "runtime_result"]
+    projection_roles = ["backend_ir", "qasm"]
+    present_roles = sorted({artifact.role for artifact in artifacts})
+
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    projection_present = [role for role in projection_roles if role in present_roles]
+    missing_projection = not projection_present
+    ok = not missing_required and not missing_projection
+
+    return {
+        "ok": ok,
+        "required_roles": required_roles,
+        "projection_roles": projection_roles,
+        "present_roles": present_roles,
+        "missing_required": missing_required,
+        "projection_present": projection_present,
+    }
 
 
 def _verify_epoch_and_signature(
@@ -198,6 +232,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--epoch-sig", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
+    parser.add_argument("--quantum-semantics-v1", action="store_true")
     return parser.parse_args()
 
 
