@@ -71,6 +71,7 @@ conformance, certification, and intake artifacts.
 
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
 - Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
+- Repo file manifest snapshot (SHA d123546801295435c6dd5f972f52593a3ec60620): `docs/audit/hpl_full_file_manifest_2026-01-27.md`
 - HPL v1 -> v1.1 Migration Memo: `docs/audit/hpl_v1_to_v1_1_migration_memo.md`
 - HPL v1.1 -> v2.0 Migration Memo: `docs/audit/hpl_v1_1_to_v2_0_migration_memo.md`
 
