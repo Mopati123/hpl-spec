@@ -84,6 +84,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
 
+    invert_parser = subparsers.add_parser("invert")
+    invert_parser.add_argument("--witness", type=Path, required=True)
+    invert_parser.add_argument("--out", type=Path, required=True)
+    invert_parser.add_argument("--pretty", action="store_true")
+
     args = parser.parse_args(argv)
 
     try:
@@ -99,6 +104,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_bundle(args)
         if args.command == "lifecycle":
             return _cmd_lifecycle(args)
+        if args.command == "invert":
+            return _cmd_invert(args)
     except HplError as exc:
         _write_refusal_evidence(
             command=args.command,
@@ -302,6 +309,36 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         "errors": quantum_errors,
     }
     print(_canonical_json(summary))
+    return 0
+
+
+def _cmd_invert(args: argparse.Namespace) -> int:
+    errors: List[str] = []
+    if not args.witness.exists():
+        errors.append(f"witness not found: {args.witness}")
+        summary = {"ok": False, "errors": errors}
+        _write_json(args.out, summary)
+        print(_canonical_json(summary))
+        return 0
+
+    witness = json.loads(args.witness.read_text(encoding="utf-8"))
+    if not isinstance(witness, dict):
+        errors.append("invalid witness: expected object")
+    if "refusal_reasons" not in witness:
+        errors.append("invalid witness: missing refusal_reasons")
+
+    if errors:
+        summary = {"ok": False, "errors": errors}
+        _write_json(args.out, summary)
+        print(_canonical_json(summary))
+        return 0
+
+    proposal = invert_constraints(witness)
+    _write_json(args.out, proposal)
+    if args.pretty:
+        print(json.dumps(proposal, indent=2, sort_keys=True))
+    else:
+        print(_canonical_json(proposal))
     return 0
 
 
