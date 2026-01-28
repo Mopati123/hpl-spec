@@ -39,14 +39,18 @@ def main() -> int:
         epoch_sig=args.epoch_sig,
         public_key=args.pub,
         quantum_semantics_v1=args.quantum_semantics_v1,
+        constraint_inversion_v1=args.constraint_inversion_v1,
     )
     manifest_path = bundle_dir / "bundle_manifest.json"
     manifest_path.write_text(_canonical_json(manifest), encoding="utf-8")
-    quantum_ok = True
+    overall_ok = True
     quantum_section = manifest.get("quantum_semantics_v1")
     if isinstance(quantum_section, dict):
-        quantum_ok = bool(quantum_section.get("ok", True))
-    return 0 if quantum_ok else 1
+        overall_ok = overall_ok and bool(quantum_section.get("ok", True))
+    constraint_section = manifest.get("constraint_inversion_v1")
+    if isinstance(constraint_section, dict):
+        overall_ok = overall_ok and bool(constraint_section.get("ok", True))
+    return 0 if overall_ok else 1
 
 
 def build_bundle(
@@ -56,6 +60,7 @@ def build_bundle(
     epoch_sig: Optional[Path],
     public_key: Optional[Path],
     quantum_semantics_v1: bool = False,
+    constraint_inversion_v1: bool = False,
 ) -> Tuple[Path, Dict[str, object]]:
     if not artifacts:
         raise ValueError("no artifacts provided")
@@ -88,6 +93,10 @@ def build_bundle(
         manifest["quantum_semantics_v1"] = _quantum_semantics_section(artifacts)
         manifest["quantum_semantics_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
+    if constraint_inversion_v1:
+        manifest["constraint_inversion_v1"] = _constraint_inversion_section(artifacts)
+        manifest["constraint_inversion_v1"]["evidence_manifest"] = "bundle_manifest.json"
+
     return bundle_dir, manifest
 
 
@@ -100,6 +109,8 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "qasm": args.qasm,
         "epoch_anchor": args.epoch_anchor,
         "epoch_sig": args.epoch_sig,
+        "constraint_witness": args.constraint_witness,
+        "dual_proposal": args.dual_proposal,
     }
 
     artifacts: List[Artifact] = []
@@ -147,6 +158,20 @@ def _quantum_semantics_section(artifacts: List[Artifact]) -> Dict[str, object]:
         "present_roles": present_roles,
         "missing_required": missing_required,
         "projection_present": projection_present,
+    }
+
+
+def _constraint_inversion_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    required_roles = ["constraint_witness", "dual_proposal"]
+    present_roles = sorted({artifact.role for artifact in artifacts})
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    ok = not missing_required
+
+    return {
+        "ok": ok,
+        "required_roles": required_roles,
+        "present_roles": present_roles,
+        "missing_required": missing_required,
     }
 
 
@@ -230,9 +255,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--qasm", type=Path)
     parser.add_argument("--epoch-anchor", type=Path)
     parser.add_argument("--epoch-sig", type=Path)
+    parser.add_argument("--constraint-witness", type=Path)
+    parser.add_argument("--dual-proposal", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
     parser.add_argument("--quantum-semantics-v1", action="store_true")
+    parser.add_argument("--constraint-inversion-v1", action="store_true")
     return parser.parse_args()
 
 
