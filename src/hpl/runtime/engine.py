@@ -55,6 +55,9 @@ class RuntimeEngine:
         witness_records: List[Dict[str, object]] = []
         constraint_witnesses: List[Dict[str, object]] = []
         verification: Optional[Dict[str, object]] = None
+        remaining_steps = None
+        if ctx.execution_token is not None:
+            remaining_steps = int(ctx.execution_token.budget_steps)
 
         witness_records.append(
             _build_witness(
@@ -85,6 +88,17 @@ class RuntimeEngine:
 
         steps = _steps_from_plan(plan_dict)
         for step in steps:
+            if remaining_steps is not None and remaining_steps <= 0:
+                reasons.append("budget_steps_exceeded")
+                witness_records.append(
+                    _build_witness(
+                        stage="budget_denied",
+                        artifact_digests={"step": _digest_text(_canonical_json(step))},
+                        timestamp=ctx.timestamp,
+                        attestation="budget_denied_witness",
+                    )
+                )
+                break
             ok, errors = contract.preconditions(step, ctx)
             if not ok:
                 reasons.extend(errors)
@@ -119,6 +133,8 @@ class RuntimeEngine:
                     attestation="step_ok_witness",
                 )
             )
+            if remaining_steps is not None:
+                remaining_steps -= 1
 
         status = "completed" if not reasons else "denied"
 
