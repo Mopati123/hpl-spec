@@ -48,6 +48,7 @@ class RuntimeContractTests(unittest.TestCase):
             reasons=[],
             verification=None,
             witness_records=[],
+            execution_token=base_plan.execution_token,
         )
         ctx = RuntimeContext()
         contract = ExecutionContract(allowed_steps={"SURF_A", "SURF_B"})
