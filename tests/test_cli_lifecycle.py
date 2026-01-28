@@ -103,6 +103,54 @@ class CliLifecycleTests(unittest.TestCase):
             self.assertFalse(summary["ok"])
             self.assertTrue(Path(summary["bundle_path"]).exists())
 
+    def test_lifecycle_refusal_emits_constraint_inversion(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            missing_anchor = out_dir / "missing.anchor.json"
+
+            first = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "classical",
+                    "--out-dir",
+                    str(out_dir),
+                    "--require-epoch",
+                    "--anchor",
+                    str(missing_anchor),
+                    "--constraint-inversion-v1",
+                ]
+            )
+            self.assertEqual(first.returncode, 0)
+            first_summary = json.loads(first.stdout)
+            self.assertFalse(first_summary["ok"])
+            first_bundle = Path(first_summary["bundle_path"])
+            first_manifest = (first_bundle / "bundle_manifest.json").read_bytes()
+            roles = {entry["role"] for entry in json.loads(first_manifest)["artifacts"]}
+            self.assertIn("constraint_witness", roles)
+            self.assertIn("dual_proposal", roles)
+
+            second = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "classical",
+                    "--out-dir",
+                    str(out_dir),
+                    "--require-epoch",
+                    "--anchor",
+                    str(missing_anchor),
+                    "--constraint-inversion-v1",
+                ]
+            )
+            self.assertEqual(second.returncode, 0)
+            second_summary = json.loads(second.stdout)
+            second_bundle = Path(second_summary["bundle_path"])
+            second_manifest = (second_bundle / "bundle_manifest.json").read_bytes()
+            self.assertEqual(first_manifest, second_manifest)
+
     def test_bundle_quantum_semantics_refusal(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             out_dir = Path(tmp_dir) / "out"

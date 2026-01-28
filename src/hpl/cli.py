@@ -19,6 +19,8 @@ from .errors import HplError
 from .runtime.context import RuntimeContext
 from .runtime.contracts import ExecutionContract
 from .runtime.engine import RuntimeEngine
+from .audit.constraint_inversion import invert_constraints
+from .audit.constraint_witness import build_constraint_witness
 from .scheduler import SchedulerContext, plan as plan_program
 from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
@@ -80,6 +82,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--sig", type=Path)
     lifecycle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
+    lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
 
     args = parser.parse_args(argv)
 
@@ -382,6 +385,25 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             outputs={"runtime_result": _digest_file(runtime_path)},
         )
 
+        # Constraint inversion artifacts
+        constraint_witness: Optional[Dict[str, object]] = None
+        dual_proposal: Optional[Dict[str, object]] = None
+        if not plan_ok:
+            constraint_witness = build_constraint_witness(
+                stage="plan_refusal",
+                refusal_reasons=plan_errors,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
+            )
+        elif not run_ok:
+            if runtime_result.constraint_witnesses:
+                constraint_witness = runtime_result.constraint_witnesses[0]
+        if constraint_witness:
+            dual_proposal = invert_constraints(constraint_witness)
+            _write_json(work_dir / "constraint_witness.json", constraint_witness)
+            _write_json(work_dir / "dual_proposal.json", dual_proposal)
+
         # Lower
         backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
         _write_json(backend_ir_path, backend_ir)
@@ -421,6 +443,15 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             else:
                 bundle_errors.append(f"signature not found: {args.sig}")
 
+        if constraint_witness:
+            artifacts.append(
+                bundle_module._artifact("constraint_witness", work_dir / "constraint_witness.json")
+            )
+        if dual_proposal:
+            artifacts.append(
+                bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json")
+            )
+
         anchor_for_bundle = args.anchor if args.anchor and args.anchor.exists() else None
         sig_for_bundle = args.sig if args.sig and args.sig.exists() else None
 
@@ -431,6 +462,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             epoch_sig=sig_for_bundle,
             public_key=args.pub,
             quantum_semantics_v1=args.quantum_semantics_v1,
+            constraint_inversion_v1=args.constraint_inversion_v1,
         )
         manifest_path = bundle_dir / "bundle_manifest.json"
         manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
@@ -455,6 +487,15 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                     errors.append(f"missing_required={','.join(missing_required)}")
                 if not quantum.get("projection_present"):
                     errors.append("missing backend projection")
+
+        if args.constraint_inversion_v1:
+            inversion = manifest.get("constraint_inversion_v1", {})
+            if not inversion.get("ok", False):
+                ok = False
+                errors.append("constraint inversion roles incomplete")
+                missing_required = inversion.get("missing_required", [])
+                if missing_required:
+                    errors.append(f"missing_required={','.join(missing_required)}")
 
         _write_evidence(
             out_dir / "lifecycle_evidence.json",
@@ -578,6 +619,11 @@ def _canonical_json(data: object) -> str:
 def _digest_text_value(value: str) -> Dict[str, str]:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
     return {"path": "inline", "digest": f"sha256:{digest}"}
+
+
+def _digest_text(value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 def _digest_file(path: Path) -> Dict[str, str]:
