@@ -54,6 +54,8 @@ class EvidenceBundleTests(unittest.TestCase):
             plan = scheduler.plan(program_ir, scheduler.SchedulerContext())
             plan_path = tmp / "plan.json"
             _write_json(plan_path, plan.to_dict())
+            token_path = tmp / "execution_token.json"
+            _write_json(token_path, plan.to_dict().get("execution_token", {}))
 
             contract = ExecutionContract(allowed_steps={step["operator_id"] for step in plan.steps})
             runtime_result = RuntimeEngine().run(plan.to_dict(), RuntimeContext(), contract)
@@ -91,6 +93,7 @@ class EvidenceBundleTests(unittest.TestCase):
                 bundle_evidence._artifact("qasm", qasm_path),
                 bundle_evidence._artifact("epoch_anchor", anchor_path),
                 bundle_evidence._artifact("epoch_sig", sig_path),
+                bundle_evidence._artifact("execution_token", token_path),
             ]
 
             bundle_dir_one, manifest_one = bundle_evidence.build_bundle(
@@ -116,6 +119,7 @@ class EvidenceBundleTests(unittest.TestCase):
             self.assertEqual(manifest_one["bundle_id"], manifest_two["bundle_id"])
             self.assertTrue(manifest_one["verification"]["epoch_ok"])
             self.assertTrue(manifest_one["verification"]["signature_ok"])
+            self.assertIn("execution_token", [entry["role"] for entry in manifest_one["artifacts"]])
 
             for entry in manifest_one["artifacts"]:
                 copied = bundle_dir_one / entry["filename"]

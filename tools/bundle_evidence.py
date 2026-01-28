@@ -101,6 +101,9 @@ def build_bundle(
 
 
 def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
+    execution_token = args.execution_token
+    if execution_token is None and args.plan is not None:
+        execution_token = _extract_execution_token(args.plan, args.out_dir)
     mapping: Dict[str, Optional[Path]] = {
         "program_ir": args.program_ir,
         "plan": args.plan,
@@ -109,6 +112,7 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "qasm": args.qasm,
         "epoch_anchor": args.epoch_anchor,
         "epoch_sig": args.epoch_sig,
+        "execution_token": execution_token,
         "constraint_witness": args.constraint_witness,
         "dual_proposal": args.dual_proposal,
     }
@@ -131,6 +135,20 @@ def _artifact(role: str, path: Path) -> Artifact:
     digest = _digest_bytes(path.read_bytes())
     filename = f"{role}_{path.name}"
     return Artifact(role=role, source=path, filename=filename, digest=digest)
+
+
+def _extract_execution_token(plan_path: Path, out_dir: Path) -> Optional[Path]:
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    token = plan.get("execution_token")
+    if not isinstance(token, dict):
+        return None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    token_path = out_dir / "execution_token.json"
+    token_path.write_text(_canonical_json(token), encoding="utf-8")
+    return token_path
 
 
 def _bundle_id(artifacts: List[Artifact]) -> str:
@@ -255,6 +273,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--qasm", type=Path)
     parser.add_argument("--epoch-anchor", type=Path)
     parser.add_argument("--epoch-sig", type=Path)
+    parser.add_argument("--execution-token", type=Path)
     parser.add_argument("--constraint-witness", type=Path)
     parser.add_argument("--dual-proposal", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
