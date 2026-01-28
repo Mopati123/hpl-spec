@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..trace import emit_witness_record
+from ..audit.constraint_witness import build_constraint_witness
 from .context import RuntimeContext
 from .contracts import ExecutionContract
 
@@ -28,6 +29,7 @@ class RuntimeResult:
     steps: List[Dict[str, object]]
     verification: Optional[Dict[str, object]]
     witness_records: List[Dict[str, object]]
+    constraint_witnesses: List[Dict[str, object]]
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -37,6 +39,7 @@ class RuntimeResult:
             "steps": list(self.steps),
             "verification": self.verification,
             "witness_records": list(self.witness_records),
+            "constraint_witnesses": list(self.constraint_witnesses),
         }
 
 
@@ -50,6 +53,7 @@ class RuntimeEngine:
         plan_dict = _plan_to_dict(plan)
         reasons: List[str] = []
         witness_records: List[Dict[str, object]] = []
+        constraint_witnesses: List[Dict[str, object]] = []
         verification: Optional[Dict[str, object]] = None
 
         witness_records.append(
@@ -118,6 +122,19 @@ class RuntimeEngine:
 
         status = "completed" if not reasons else "denied"
 
+        if status == "denied":
+            constraint_witnesses.append(
+                build_constraint_witness(
+                    stage="runtime_refusal",
+                    refusal_reasons=reasons,
+                    artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                    observer_id="papas",
+                    timestamp=None,
+                )
+            )
+            if not constraint_witnesses:
+                raise RuntimeError("internal_error: missing constraint witness for refusal")
+
         result_core = {
             "status": status,
             "reasons": list(reasons),
@@ -142,6 +159,7 @@ class RuntimeEngine:
             steps=steps,
             verification=verification,
             witness_records=witness_records,
+            constraint_witnesses=constraint_witnesses,
         )
 
 

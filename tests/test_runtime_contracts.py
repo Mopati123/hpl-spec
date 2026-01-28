@@ -54,6 +54,7 @@ class RuntimeContractTests(unittest.TestCase):
         result = RuntimeEngine().run(plan, ctx, contract)
         self.assertEqual(result.status, "denied")
         self.assertTrue(any("plan not approved" in reason for reason in result.reasons))
+        self.assertTrue(result.constraint_witnesses)
 
     def test_refuse_step_not_in_contract_allowed_steps(self):
         plan = _build_plan()
@@ -62,6 +63,7 @@ class RuntimeContractTests(unittest.TestCase):
         result = RuntimeEngine().run(plan, ctx, contract)
         self.assertEqual(result.status, "denied")
         self.assertTrue(any("step not allowed" in reason for reason in result.reasons))
+        self.assertTrue(result.constraint_witnesses)
 
     def test_refuse_epoch_verification_failure(self):
         plan = _build_plan()
@@ -77,6 +79,7 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertTrue(any("epoch failure" in reason for reason in result.reasons))
         stages = [record.get("stage") for record in result.witness_records]
         self.assertIn("epoch_verification", stages)
+        self.assertTrue(result.constraint_witnesses)
 
     def test_trace_and_papas_witness_emitted(self):
         plan = _build_plan()
@@ -101,6 +104,7 @@ class RuntimeContractTests(unittest.TestCase):
         json_two = json.dumps(result_two.to_dict(), sort_keys=True)
         self.assertEqual(json_one, json_two)
         self.assertEqual(result_one.result_id, result_two.result_id)
+        self.assertEqual(result_one.constraint_witnesses, result_two.constraint_witnesses)
 
 
 if __name__ == "__main__":
