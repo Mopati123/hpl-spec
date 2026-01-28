@@ -103,6 +103,20 @@ class SchedulerAuthorityTests(unittest.TestCase):
         ctx = scheduler.SchedulerContext()
         plan = scheduler.plan(program_ir, ctx)
         self.assertTrue(plan.witness_records)
+        self.assertIsNotNone(plan.execution_token)
+
+    def test_execution_token_determinism(self):
+        program_ir = _sample_program_ir()
+        ctx_one = scheduler.SchedulerContext(allowed_backends=["QASM", "CLASSICAL"])
+        ctx_two = scheduler.SchedulerContext(allowed_backends=["CLASSICAL", "QASM"])
+        plan_one = scheduler.plan(program_ir, ctx_one)
+        plan_two = scheduler.plan(program_ir, ctx_two)
+        token_one = plan_one.execution_token
+        token_two = plan_two.execution_token
+        self.assertIsNotNone(token_one)
+        self.assertIsNotNone(token_two)
+        self.assertEqual(token_one["token_id"], token_two["token_id"])
+        self.assertEqual(token_one["allowed_backends"], ["CLASSICAL", "QASM"])
 
 
 if __name__ == "__main__":

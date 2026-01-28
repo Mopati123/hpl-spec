@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .trace import emit_witness_record
+from .execution_token import ExecutionToken
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +18,7 @@ VERIFY_EPOCH_PATH = ROOT / "tools" / "verify_epoch.py"
 VERIFY_SIGNATURE_PATH = ROOT / "tools" / "verify_anchor_signature.py"
 DEFAULT_PUBLIC_KEY = ROOT / "config" / "keys" / "ci_ed25519.pub"
 DEFAULT_TIMESTAMP = "1970-01-01T00:00:00Z"
+DEFAULT_ALLOWED_BACKENDS = ["PYTHON", "CLASSICAL", "QASM"]
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,9 @@ class SchedulerContext:
     root: Path = ROOT
     git_commit_override: Optional[str] = None
     timestamp: str = DEFAULT_TIMESTAMP
+    allowed_backends: Optional[List[str]] = None
+    budget_steps: int = 100
+    determinism_mode: str = "deterministic"
 
 
 @dataclass(frozen=True)
@@ -39,6 +44,7 @@ class ExecutionPlan:
     reasons: List[str]
     verification: Optional[Dict[str, object]]
     witness_records: List[Dict[str, object]]
+    execution_token: Optional[Dict[str, object]] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -49,6 +55,7 @@ class ExecutionPlan:
             "reasons": list(self.reasons),
             "verification": self.verification,
             "witness_records": list(self.witness_records),
+            "execution_token": self.execution_token,
         }
 
 
@@ -57,6 +64,12 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
     reasons: List[str] = []
     witness_records: List[Dict[str, object]] = []
     verification: Optional[Dict[str, object]] = None
+    allowed_backends = ctx.allowed_backends or list(DEFAULT_ALLOWED_BACKENDS)
+    token = ExecutionToken.build(
+        allowed_backends=allowed_backends,
+        budget_steps=ctx.budget_steps,
+        determinism_mode=ctx.determinism_mode,
+    )
 
     if ctx.require_epoch_verification:
         verification, verification_errors = _verify_epoch_and_signature(ctx)
@@ -84,6 +97,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         "steps": steps,
         "reasons": list(reasons),
         "verification": verification,
+        "execution_token": token.to_dict(),
     }
     plan_id = _digest_text(_canonical_json(plan_core))
 
@@ -104,6 +118,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         reasons=reasons,
         verification=verification,
         witness_records=witness_records,
+        execution_token=token.to_dict(),
     )
 
 
