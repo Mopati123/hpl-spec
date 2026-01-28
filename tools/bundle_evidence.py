@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from nacl.exceptions import BadSignatureError
+from nacl.signing import SigningKey, VerifyKey
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -43,6 +46,23 @@ def main() -> int:
     )
     manifest_path = bundle_dir / "bundle_manifest.json"
     manifest_path.write_text(_canonical_json(manifest), encoding="utf-8")
+    signature_path: Optional[Path] = None
+    bundle_verify_ok = True
+    bundle_verify_errors: List[str] = []
+
+    if args.sign_bundle:
+        if not args.signing_key:
+            raise ValueError("sign_bundle requires --signing-key")
+        signature_path = sign_bundle_manifest(manifest_path, args.signing_key)
+
+    if args.verify_bundle:
+        if signature_path is None:
+            signature_path = manifest_path.with_suffix(".sig")
+        bundle_verify_ok, bundle_verify_errors = verify_bundle_manifest_signature(
+            manifest_path,
+            signature_path,
+            args.pub,
+        )
     overall_ok = True
     quantum_section = manifest.get("quantum_semantics_v1")
     if isinstance(quantum_section, dict):
@@ -50,6 +70,9 @@ def main() -> int:
     constraint_section = manifest.get("constraint_inversion_v1")
     if isinstance(constraint_section, dict):
         overall_ok = overall_ok and bool(constraint_section.get("ok", True))
+    overall_ok = overall_ok and bundle_verify_ok
+    if args.verify_bundle and not bundle_verify_ok:
+        print(_canonical_json({"ok": False, "errors": bundle_verify_errors}))
     return 0 if overall_ok else 1
 
 
@@ -150,6 +173,39 @@ def _extract_execution_token(plan_path: Path, out_dir: Path) -> Optional[Path]:
     token_path = out_dir / "execution_token.json"
     token_path.write_text(_canonical_json(token), encoding="utf-8")
     return token_path
+
+
+def sign_bundle_manifest(manifest_path: Path, signing_key_path: Path) -> Path:
+    signing_key = _load_signing_key(signing_key_path)
+    payload = manifest_path.read_bytes()
+    signature = signing_key.sign(payload).signature
+    signature_path = manifest_path.with_suffix(".sig")
+    signature_path.write_text(signature.hex(), encoding="utf-8")
+    return signature_path
+
+
+def verify_bundle_manifest_signature(
+    manifest_path: Path,
+    signature_path: Path,
+    public_key_path: Path,
+) -> Tuple[bool, List[str]]:
+    errors: List[str] = []
+    if not signature_path.exists():
+        return False, [f"signature not found: {signature_path}"]
+    payload = manifest_path.read_bytes()
+    signature_hex = signature_path.read_text(encoding="utf-8").strip()
+    if not signature_hex:
+        return False, ["signature file is empty"]
+    try:
+        signature = bytes.fromhex(signature_hex)
+    except ValueError:
+        return False, ["signature is not valid hex"]
+    try:
+        verify_key = _load_verify_key(public_key_path)
+        verify_key.verify(payload, signature)
+    except BadSignatureError:
+        errors.append("signature verification failed")
+    return not errors, errors
 
 
 def _bundle_id(artifacts: List[Artifact]) -> str:
@@ -264,6 +320,26 @@ def _digest_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _load_signing_key(path: Path) -> SigningKey:
+    key_hex = path.read_text(encoding="utf-8").strip()
+    if not key_hex:
+        raise ValueError("signing key file is empty")
+    key_bytes = bytes.fromhex(key_hex)
+    if len(key_bytes) != 32:
+        raise ValueError("private key seed must be 32 bytes (64 hex chars)")
+    return SigningKey(key_bytes)
+
+
+def _load_verify_key(path: Path) -> VerifyKey:
+    key_hex = path.read_text(encoding="utf-8").strip()
+    if not key_hex:
+        raise ValueError("public key file is empty")
+    key_bytes = bytes.fromhex(key_hex)
+    if len(key_bytes) != 32:
+        raise ValueError("public key must be 32 bytes (64 hex chars)")
+    return VerifyKey(key_bytes)
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Bundle evidence artifacts.")
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -281,6 +357,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--extra", type=Path, action="append", default=[])
     parser.add_argument("--quantum-semantics-v1", action="store_true")
     parser.add_argument("--constraint-inversion-v1", action="store_true")
+    parser.add_argument("--sign-bundle", action="store_true")
+    parser.add_argument("--signing-key", type=Path)
+    parser.add_argument("--verify-bundle", action="store_true")
     return parser.parse_args()
 
 

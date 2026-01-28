@@ -76,6 +76,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
     bundle_parser.add_argument("--quantum-semantics-v1", action="store_true")
+    bundle_parser.add_argument("--sign-bundle", action="store_true")
+    bundle_parser.add_argument("--signing-key", type=Path)
+    bundle_parser.add_argument("--verify-bundle", action="store_true")
 
     lifecycle_parser = subparsers.add_parser("lifecycle")
     lifecycle_parser.add_argument("input", type=Path)
@@ -301,6 +304,8 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
     manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
 
     quantum_errors: List[str] = []
+    bundle_sig_errors: List[str] = []
+    signature_path = None
     ok = True
     if args.quantum_semantics_v1:
         quantum = manifest.get("quantum_semantics_v1", {})
@@ -313,13 +318,35 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
             if not quantum.get("projection_present"):
                 quantum_errors.append("missing backend projection")
 
+    if args.sign_bundle:
+        if not args.signing_key:
+            ok = False
+            bundle_sig_errors.append("sign_bundle requires --signing-key")
+        else:
+            signature_path = bundle_module.sign_bundle_manifest(
+                manifest_path,
+                args.signing_key,
+            )
+
+    if args.verify_bundle:
+        if signature_path is None:
+            signature_path = manifest_path.with_suffix(".sig")
+        verify_ok, verify_errors = bundle_module.verify_bundle_manifest_signature(
+            manifest_path,
+            signature_path,
+            args.pub,
+        )
+        if not verify_ok:
+            ok = False
+            bundle_sig_errors.extend(verify_errors)
+
     evidence_inputs = {item.role: _digest_file(item.source) for item in artifacts}
     evidence_path = args.out_dir / "bundle_evidence.json"
     _write_evidence(
         evidence_path,
         command="bundle",
         ok=ok,
-        errors=quantum_errors,
+        errors=quantum_errors + bundle_sig_errors,
         inputs=evidence_inputs,
         outputs={"bundle_manifest": _digest_file(manifest_path)},
     )
@@ -328,7 +355,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         "ok": ok,
         "bundle_path": str(bundle_dir),
         "bundle_id": manifest.get("bundle_id"),
-        "errors": quantum_errors,
+        "errors": quantum_errors + bundle_sig_errors,
     }
     print(_canonical_json(summary))
     return 0
