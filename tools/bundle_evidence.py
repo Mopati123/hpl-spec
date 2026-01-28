@@ -65,11 +65,12 @@ def build_bundle(
     if not artifacts:
         raise ValueError("no artifacts provided")
 
-    bundle_id = _bundle_id(artifacts)
+    artifacts_sorted = sorted(artifacts, key=lambda item: (item.role, item.filename))
+    bundle_id = _bundle_id(artifacts_sorted)
     bundle_dir = out_dir / f"bundle_{bundle_id}"
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    for artifact in artifacts:
+    for artifact in artifacts_sorted:
         shutil.copyfile(artifact.source, bundle_dir / artifact.filename)
 
     git_commit = _git_commit()
@@ -85,7 +86,7 @@ def build_bundle(
                 "filename": artifact.filename,
                 "digest": artifact.digest,
             }
-            for artifact in artifacts
+            for artifact in artifacts_sorted
         ],
     }
 

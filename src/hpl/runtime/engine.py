@@ -133,7 +133,7 @@ class RuntimeEngine:
                 break
 
             effect_step = _normalize_effect_step(step)
-            effect_result = _execute_effect(effect_step)
+            effect_result = _execute_effect_with_context(effect_step, ctx)
             if not effect_result.ok:
                 reasons.extend(effect_result.refusal_reasons)
                 witness_records.append(
@@ -240,8 +240,12 @@ def _normalize_effect_step(step: Dict[str, object]) -> EffectStep:
 
 
 def _execute_effect(step: EffectStep) -> EffectResult:
+    raise RuntimeError("effect execution requires context")
+
+
+def _execute_effect_with_context(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     handler = get_handler(step.effect_type)
-    return handler(step)
+    return handler(step, ctx)
 
 
 def _build_transcript_entry(

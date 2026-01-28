@@ -33,6 +33,9 @@ class SchedulerContext:
     allowed_backends: Optional[List[str]] = None
     budget_steps: int = 100
     determinism_mode: str = "deterministic"
+    emit_effect_steps: bool = False
+    backend_target: Optional[str] = None
+    artifact_paths: Optional[Dict[str, str]] = None
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,10 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
             )
         )
 
-    steps = _build_steps(program_ir)
+    if ctx.emit_effect_steps:
+        steps = _build_effect_steps(program_ir, ctx)
+    else:
+        steps = _build_steps(program_ir)
     status = "planned" if not reasons else "denied"
 
     plan_core = {
@@ -139,6 +145,74 @@ def _build_steps(program_ir: Dict[str, object]) -> List[Dict[str, object]]:
                 "coefficient": term.get("coefficient", 0.0),
             }
         )
+    return steps
+
+
+def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    backend_target = (ctx.backend_target or "classical").upper()
+    artifact_paths = ctx.artifact_paths or {}
+    backend_ir_path = artifact_paths.get("backend_ir")
+    qasm_path = artifact_paths.get("qasm")
+
+    backend_args: Dict[str, object] = {
+        "program_ir": program_ir,
+        "backend_target": backend_target,
+    }
+    if backend_ir_path:
+        backend_args["out_path"] = backend_ir_path
+    add_step(
+        {
+            "step_id": f"lower_backend_ir_{index}",
+            "effect_type": "LOWER_BACKEND_IR",
+            "args": backend_args,
+            "requires": {"backend": backend_target},
+        }
+    )
+
+    if backend_target == "QASM":
+        qasm_args: Dict[str, object] = {"program_ir": program_ir}
+        if qasm_path:
+            qasm_args["out_path"] = qasm_path
+        add_step(
+            {
+                "step_id": f"lower_qasm_{index}",
+                "effect_type": "LOWER_QASM",
+                "args": qasm_args,
+                "requires": {"backend": backend_target},
+            }
+        )
+
     return steps
 
 

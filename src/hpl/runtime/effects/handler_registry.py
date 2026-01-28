@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Callable, Dict
 
+from ..context import RuntimeContext
 from .effect_step import EffectResult, EffectStep
 
 
-Handler = Callable[[EffectStep], EffectResult]
+Handler = Callable[[EffectStep, RuntimeContext], EffectResult]
 
 
 _REGISTRY: Dict[str, Handler] = {}

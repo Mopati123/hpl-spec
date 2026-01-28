@@ -89,6 +89,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
     lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
+    lifecycle_parser.add_argument("--kernel", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -401,6 +402,9 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             public_key_path=args.pub,
             allowed_backends=_parse_backends(args.allowed_backends),
             budget_steps=args.budget_steps,
+            emit_effect_steps=args.kernel,
+            backend_target=args.backend,
+            artifact_paths=None,
         )
         plan_obj = plan_program(program_ir, ctx)
         plan_dict = plan_obj.to_dict()
@@ -427,17 +431,20 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             requested_backend=_normalize_backend(args.backend),
+            trace_sink=work_dir if args.kernel else None,
         )
-        allowed_steps = {
-            str(step.get("operator_id"))
-            for step in plan_dict.get("steps", [])
-            if isinstance(step, dict)
-        }
+        allowed_steps = set()
+        for step in plan_dict.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            step_id = step.get("step_id") or step.get("operator_id")
+            if step_id:
+                allowed_steps.add(str(step_id))
         contract = ExecutionContract(
             allowed_steps=allowed_steps,
-            require_epoch_verification=args.require_epoch,
-            require_signature_verification=bool(args.sig) if args.require_epoch else False,
-            required_backend=_normalize_backend(args.backend),
+            require_epoch_verification=False if args.kernel else args.require_epoch,
+            require_signature_verification=False if args.kernel else bool(args.sig) if args.require_epoch else False,
+            required_backend=None if args.kernel else _normalize_backend(args.backend),
         )
         runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
         runtime_dict = runtime_result.to_dict()
@@ -472,21 +479,22 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             _write_json(work_dir / "dual_proposal.json", dual_proposal)
 
         # Lower
-        backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
-        _write_json(backend_ir_path, backend_ir)
-        output_digests = {"backend_ir": _digest_text_value(_canonical_json(backend_ir))}
-        if args.backend == "qasm":
-            qasm = lower_backend_ir_to_qasm(backend_ir)
-            qasm_path.write_text(qasm, encoding="utf-8")
-            output_digests["qasm"] = _digest_text_value(qasm)
-        _write_evidence(
-            work_dir / "lower_evidence.json",
-            command="lower",
-            ok=True,
-            errors=[],
-            inputs={"program_ir": _digest_file(program_ir_path)},
-            outputs=output_digests,
-        )
+        if not args.kernel:
+            backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
+            _write_json(backend_ir_path, backend_ir)
+            output_digests = {"backend_ir": _digest_text_value(_canonical_json(backend_ir))}
+            if args.backend == "qasm":
+                qasm = lower_backend_ir_to_qasm(backend_ir)
+                qasm_path.write_text(qasm, encoding="utf-8")
+                output_digests["qasm"] = _digest_text_value(qasm)
+            _write_evidence(
+                work_dir / "lower_evidence.json",
+                command="lower",
+                ok=True,
+                errors=[],
+                inputs={"program_ir": _digest_file(program_ir_path)},
+                outputs=output_digests,
+            )
 
         # Bundle
         bundle_module = _load_bundle_module()
@@ -494,10 +502,16 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             bundle_module._artifact("program_ir", program_ir_path),
             bundle_module._artifact("plan", plan_path),
             bundle_module._artifact("runtime_result", runtime_path),
-            bundle_module._artifact("backend_ir", backend_ir_path),
         ]
+        if plan_dict.get("execution_token"):
+            token_path = work_dir / "execution_token.json"
+            _write_json(token_path, plan_dict.get("execution_token", {}))
+            artifacts.append(bundle_module._artifact("execution_token", token_path))
+        if backend_ir_path.exists():
+            artifacts.append(bundle_module._artifact("backend_ir", backend_ir_path))
         if args.backend == "qasm":
-            artifacts.append(bundle_module._artifact("qasm", qasm_path))
+            if qasm_path.exists():
+                artifacts.append(bundle_module._artifact("qasm", qasm_path))
         bundle_errors: List[str] = []
         if args.anchor:
             if args.anchor.exists():
