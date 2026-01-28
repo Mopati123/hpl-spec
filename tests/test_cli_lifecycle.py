@@ -173,6 +173,31 @@ class CliLifecycleTests(unittest.TestCase):
             self.assertFalse(summary["ok"])
             self.assertTrue(summary["errors"])
 
+    def test_lifecycle_backend_token_refusal(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            result = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "qasm",
+                    "--out-dir",
+                    str(out_dir),
+                    "--allowed-backends",
+                    "CLASSICAL",
+                    "--constraint-inversion-v1",
+                ]
+            )
+            self.assertEqual(result.returncode, 0)
+            summary = json.loads(result.stdout)
+            self.assertFalse(summary["ok"])
+            bundle = Path(summary["bundle_path"]) / "bundle_manifest.json"
+            manifest = json.loads(bundle.read_text(encoding="utf-8"))
+            roles = {entry["role"] for entry in manifest["artifacts"]}
+            self.assertIn("constraint_witness", roles)
+            self.assertIn("dual_proposal", roles)
+
 
 if __name__ == "__main__":
     unittest.main()

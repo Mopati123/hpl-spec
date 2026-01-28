@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+from ..execution_token import ExecutionToken
+
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PUBLIC_KEY = ROOT / "config" / "keys" / "ci_ed25519.pub"
@@ -21,3 +23,5 @@ class RuntimeContext:
     trace_sink: Optional[Path] = None
     observers: Optional[List[str]] = None
     timestamp: str = DEFAULT_TIMESTAMP
+    execution_token: Optional[ExecutionToken] = None
+    requested_backend: Optional[str] = None

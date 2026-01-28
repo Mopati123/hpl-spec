@@ -21,6 +21,7 @@ from .runtime.contracts import ExecutionContract
 from .runtime.engine import RuntimeEngine
 from .audit.constraint_inversion import invert_constraints
 from .audit.constraint_witness import build_constraint_witness
+from .execution_token import ExecutionToken
 from .scheduler import SchedulerContext, plan as plan_program
 from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
@@ -46,6 +47,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     plan_parser.add_argument("--anchor", type=Path)
     plan_parser.add_argument("--sig", type=Path)
     plan_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    plan_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
+    plan_parser.add_argument("--budget-steps", type=int, default=100)
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("plan", type=Path)
@@ -54,6 +57,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_parser.add_argument("--anchor", type=Path)
     run_parser.add_argument("--sig", type=Path)
     run_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    run_parser.add_argument("--backend", choices=["classical", "qasm"])
 
     lower_parser = subparsers.add_parser("lower")
     lower_parser.add_argument("--backend", choices=["classical", "qasm"], required=True)
@@ -83,6 +87,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
+    lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
+    lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -149,6 +155,8 @@ def _cmd_plan(args: argparse.Namespace) -> int:
         anchor_path=args.anchor,
         signature_path=args.sig,
         public_key_path=args.pub,
+        allowed_backends=_parse_backends(args.allowed_backends),
+        budget_steps=args.budget_steps,
     )
     execution_plan = plan_program(program_ir, ctx)
     plan_dict = execution_plan.to_dict()
@@ -170,12 +178,25 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     plan_dict = json.loads(args.plan.read_text(encoding="utf-8"))
+    token_dict = plan_dict.get("execution_token")
+    execution_token = None
+    if isinstance(token_dict, dict):
+        execution_token = ExecutionToken.from_dict(token_dict)
     ctx = RuntimeContext(
         epoch_anchor_path=args.anchor,
         epoch_sig_path=args.sig,
         ci_pubkey_path=args.pub,
+        execution_token=execution_token,
+        requested_backend=_normalize_backend(args.backend) if args.backend else None,
     )
     contract = _load_contract(args.contract, plan_dict)
+    if args.backend:
+        contract = ExecutionContract(
+            allowed_steps=contract.allowed_steps,
+            require_epoch_verification=contract.require_epoch_verification,
+            require_signature_verification=contract.require_signature_verification,
+            required_backend=_normalize_backend(args.backend),
+        )
     result = RuntimeEngine().run(plan_dict, ctx, contract)
     result_dict = result.to_dict()
     _write_json(args.out, result_dict)
@@ -378,6 +399,8 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             anchor_path=args.anchor,
             signature_path=args.sig,
             public_key_path=args.pub,
+            allowed_backends=_parse_backends(args.allowed_backends),
+            budget_steps=args.budget_steps,
         )
         plan_obj = plan_program(program_ir, ctx)
         plan_dict = plan_obj.to_dict()
@@ -394,10 +417,16 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         )
 
         # Runtime
+        token_dict = plan_dict.get("execution_token")
+        execution_token = None
+        if isinstance(token_dict, dict):
+            execution_token = ExecutionToken.from_dict(token_dict)
         runtime_ctx = RuntimeContext(
             epoch_anchor_path=args.anchor,
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
+            execution_token=execution_token,
+            requested_backend=_normalize_backend(args.backend),
         )
         allowed_steps = {
             str(step.get("operator_id"))
@@ -408,6 +437,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             allowed_steps=allowed_steps,
             require_epoch_verification=args.require_epoch,
             require_signature_verification=bool(args.sig) if args.require_epoch else False,
+            required_backend=_normalize_backend(args.backend),
         )
         runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
         runtime_dict = runtime_result.to_dict()
@@ -656,6 +686,17 @@ def _canonical_json(data: object) -> str:
 def _digest_text_value(value: str) -> Dict[str, str]:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
     return {"path": "inline", "digest": f"sha256:{digest}"}
+
+
+def _parse_backends(value: str) -> List[str]:
+    parts = [item.strip() for item in value.split(",") if item.strip()]
+    return sorted({item.upper() for item in parts}) or ["PYTHON", "CLASSICAL", "QASM"]
+
+
+def _normalize_backend(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return value.upper()
 
 
 def _digest_text(value: str) -> str:
