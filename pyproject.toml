@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hpl-spec"
+version = "2.5.0"
+description = "Hamiltonian Programming Language (HPL) specification and execution sovereignty tooling"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pynacl==1.5.0",
+]
+
+[project.scripts]
+hpl = "hpl.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -16,6 +16,7 @@ from .dynamics.ir_emitter import emit_program_ir
 from .emergence.dsl.parser import parse_file
 from .emergence.macros.expander import expand_program
 from .errors import HplError
+from . import __version__
 from .runtime.context import RuntimeContext
 from .runtime.contracts import ExecutionContract
 from .runtime.engine import RuntimeEngine
@@ -34,6 +35,7 @@ BUNDLE_EVIDENCE_PATH = ROOT / "tools" / "bundle_evidence.py"
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="hpl")
+    parser.add_argument("--version", action="version", version=f"hpl {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ir_parser = subparsers.add_parser("ir")
