@@ -192,6 +192,107 @@ def handle_validate_quantum_semantics(step: EffectStep, ctx: RuntimeContext) -> 
     return _ok(step, digests)
 
 
+def handle_evaluate_agent_proposal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    proposal_path = _resolve_output_path(ctx, step.args, key="proposal_path")
+    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    if proposal_path is None or policy_path is None:
+        return _refuse(step, "AgentInputsMissing", ["proposal or policy path missing"])
+    if not proposal_path.exists() or not policy_path.exists():
+        return _refuse(step, "AgentInputsMissing", ["proposal or policy file missing"])
+
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "AgentProposalInvalid", ["proposal invalid json"])
+
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "AgentPolicyInvalid", ["policy invalid json"])
+
+    if not isinstance(proposal, dict):
+        return _refuse(step, "AgentProposalInvalid", ["proposal must be an object"])
+    if not isinstance(policy, dict):
+        return _refuse(step, "AgentPolicyInvalid", ["policy must be an object"])
+
+    allowed_actions = policy.get("allowed_actions", [])
+    if not isinstance(allowed_actions, list):
+        return _refuse(step, "AgentPolicyInvalid", ["allowed_actions must be a list"])
+    allowed_actions = [str(item) for item in allowed_actions]
+
+    allowed_capabilities = policy.get("allowed_capabilities", [])
+    if not isinstance(allowed_capabilities, list):
+        return _refuse(step, "AgentPolicyInvalid", ["allowed_capabilities must be a list"])
+    allowed_capabilities = [str(item) for item in allowed_capabilities]
+
+    action = str(proposal.get("action", "")).strip()
+    risk_score = proposal.get("risk_score", 0)
+    required_caps = proposal.get("required_capabilities", [])
+    if not isinstance(required_caps, list):
+        return _refuse(step, "AgentProposalInvalid", ["required_capabilities must be a list"])
+    required_caps = [str(item) for item in required_caps]
+
+    reasons: List[str] = []
+    if not action:
+        reasons.append("action missing")
+    elif action not in allowed_actions:
+        reasons.append("action not allowed")
+
+    try:
+        risk_value = float(risk_score)
+    except (TypeError, ValueError):
+        risk_value = 0.0
+        reasons.append("risk_score invalid")
+
+    max_risk = policy.get("max_risk_score", 0)
+    try:
+        max_risk_value = float(max_risk)
+    except (TypeError, ValueError):
+        max_risk_value = 0.0
+        reasons.append("max_risk_score invalid")
+
+    if risk_value > max_risk_value:
+        reasons.append("risk_score exceeds max_risk_score")
+
+    for cap in required_caps:
+        if cap not in allowed_capabilities:
+            reasons.append(f"capability not allowed: {cap}")
+
+    proposal_digest = _digest_bytes(proposal_path.read_bytes())
+    policy_digest = _digest_bytes(policy_path.read_bytes())
+
+    decision = {
+        "proposal_id": proposal.get("proposal_id"),
+        "policy_id": policy.get("policy_id"),
+        "action": action,
+        "allowed": not reasons,
+        "reasons": list(reasons),
+        "proposal_digest": proposal_digest,
+        "policy_digest": policy_digest,
+    }
+    decision_payload = _canonical_json(decision)
+    decision_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="decision_path",
+        default_name="agent_decision.json",
+    )
+    decision_digest = _digest_bytes(decision_payload.encode("utf-8"))
+    digests = {
+        proposal_path.name: proposal_digest,
+        policy_path.name: policy_digest,
+    }
+    if decision_path:
+        decision_path.write_text(decision_payload, encoding="utf-8")
+        digests[decision_path.name] = _digest_bytes(decision_path.read_bytes())
+    else:
+        digests["agent_decision.json"] = decision_digest
+
+    if reasons:
+        return _refuse(step, "AgentProposalRefused", reasons, digests)
+    return _ok(step, digests)
+
+
 def handle_sign_bundle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     manifest_path = _resolve_output_path(ctx, step.args, key="bundle_manifest")
     signing_key = _resolve_output_path(ctx, step.args, key="signing_key")

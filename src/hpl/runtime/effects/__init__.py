@@ -5,6 +5,7 @@ from .handlers import (
     handle_assert_contract,
     handle_bundle_evidence,
     handle_check_repo_state,
+    handle_evaluate_agent_proposal,
     handle_emit_artifact,
     handle_invert_constraints,
     handle_lower_backend_ir,
@@ -31,6 +32,7 @@ register_handler(EffectType.CHECK_REPO_STATE, handle_check_repo_state)
 register_handler(EffectType.VALIDATE_REGISTRIES, handle_validate_registries)
 register_handler(EffectType.VALIDATE_COUPLING_TOPOLOGY, handle_validate_coupling_topology)
 register_handler(EffectType.VALIDATE_QUANTUM_SEMANTICS, handle_validate_quantum_semantics)
+register_handler(EffectType.EVALUATE_AGENT_PROPOSAL, handle_evaluate_agent_proposal)
 register_handler(EffectType.SIGN_BUNDLE, handle_sign_bundle)
 register_handler(EffectType.VERIFY_BUNDLE, handle_verify_bundle)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)

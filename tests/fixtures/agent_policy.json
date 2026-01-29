@@ -1,0 +1,6 @@
+{
+  "policy_id": "agent_policy_v1",
+  "allowed_actions": ["observe", "report"],
+  "max_risk_score": 5,
+  "allowed_capabilities": ["read_only"]
+}

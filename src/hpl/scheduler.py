@@ -43,6 +43,9 @@ class SchedulerContext:
     ci_coupling_registry_path: Optional[Path] = None
     ci_bundle_out_dir: Optional[Path] = None
     ci_bundle_signing_key_path: Optional[Path] = None
+    agent_policy_path: Optional[Path] = None
+    agent_proposal_path: Optional[Path] = None
+    agent_decision_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,8 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
 
     if ctx.track == "ci_governance":
         return _build_ci_governance_steps(program_ir, ctx)
+    if ctx.track == "agent_governance":
+        return _build_agent_governance_steps(program_ir, ctx)
 
     if ctx.ecmo_input_path:
         selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
@@ -315,6 +320,60 @@ def _build_ci_governance_steps(program_ir: Dict[str, object], ctx: SchedulerCont
             "effect_type": "LOWER_BACKEND_IR",
             "args": backend_args,
             "requires": {"backend": backend_target},
+        }
+    )
+
+    return steps
+
+
+def _build_agent_governance_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    proposal_path = str(ctx.agent_proposal_path) if ctx.agent_proposal_path else None
+    policy_path = str(ctx.agent_policy_path) if ctx.agent_policy_path else None
+    decision_path = str(ctx.agent_decision_path) if ctx.agent_decision_path else None
+    args: Dict[str, object] = {}
+    if proposal_path:
+        args["proposal_path"] = proposal_path
+    if policy_path:
+        args["policy_path"] = policy_path
+    if decision_path:
+        args["decision_path"] = decision_path
+    add_step(
+        {
+            "step_id": f"evaluate_agent_proposal_{index}",
+            "effect_type": "EVALUATE_AGENT_PROPOSAL",
+            "args": args,
+            "requires": {},
         }
     )
 

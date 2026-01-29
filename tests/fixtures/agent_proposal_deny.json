@@ -1,0 +1,6 @@
+{
+  "proposal_id": "proposal_deny",
+  "action": "execute",
+  "risk_score": 10,
+  "required_capabilities": ["write"]
+}

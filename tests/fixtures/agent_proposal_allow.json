@@ -1,0 +1,6 @@
+{
+  "proposal_id": "proposal_allow",
+  "action": "observe",
+  "risk_score": 1,
+  "required_capabilities": ["read_only"]
+}
