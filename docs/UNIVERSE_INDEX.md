@@ -89,4 +89,5 @@ conformance, certification, and intake artifacts.
 
 - HPL v1 -> v2.0 Evolution Overview (External): `docs/publish/hpl_v1_to_v2_0_evolution_overview.md`
 - HPL Codebase Overview: `docs/publish/hpl_codebase_overview.md`
+- Production Readiness Checklist: docs/publish/production_readiness_checklist.md
 
