@@ -38,6 +38,11 @@ class SchedulerContext:
     artifact_paths: Optional[Dict[str, str]] = None
     ecmo_input_path: Optional[Path] = None
     measurement_selection_path: Optional[Path] = None
+    track: Optional[str] = None
+    ci_repo_state_path: Optional[Path] = None
+    ci_coupling_registry_path: Optional[Path] = None
+    ci_bundle_out_dir: Optional[Path] = None
+    ci_bundle_signing_key_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +164,9 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         steps.append(step)
         index += 1
 
+    if ctx.track == "ci_governance":
+        return _build_ci_governance_steps(program_ir, ctx)
+
     if ctx.ecmo_input_path:
         selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
         if ctx.measurement_selection_path:
@@ -227,6 +235,88 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
                 "requires": {"backend": backend_target},
             }
         )
+
+    return steps
+
+
+def _build_ci_governance_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.ci_repo_state_path:
+        add_step(
+            {
+                "step_id": f"check_repo_state_{index}",
+                "effect_type": "CHECK_REPO_STATE",
+                "args": {"state_path": str(ctx.ci_repo_state_path)},
+                "requires": {},
+            }
+        )
+
+    add_step(
+        {
+            "step_id": f"validate_registries_{index}",
+            "effect_type": "VALIDATE_REGISTRIES",
+            "args": {},
+            "requires": {},
+        }
+    )
+
+    if ctx.ci_coupling_registry_path:
+        add_step(
+            {
+                "step_id": f"validate_coupling_{index}",
+                "effect_type": "VALIDATE_COUPLING_TOPOLOGY",
+                "args": {"registry_path": str(ctx.ci_coupling_registry_path)},
+                "requires": {},
+            }
+        )
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    backend_target = (ctx.backend_target or "classical").upper()
+    artifact_paths = ctx.artifact_paths or {}
+    backend_ir_path = artifact_paths.get("backend_ir")
+    backend_args: Dict[str, object] = {
+        "program_ir": program_ir,
+        "backend_target": backend_target,
+    }
+    if backend_ir_path:
+        backend_args["out_path"] = backend_ir_path
+    add_step(
+        {
+            "step_id": f"lower_backend_ir_{index}",
+            "effect_type": "LOWER_BACKEND_IR",
+            "args": backend_args,
+            "requires": {"backend": backend_target},
+        }
+    )
 
     return steps
 

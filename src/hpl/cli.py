@@ -97,6 +97,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
 
+    demo_parser = subparsers.add_parser("demo")
+    demo_subparsers = demo_parser.add_subparsers(dest="demo_name", required=True)
+    ci_demo = demo_subparsers.add_parser("ci-governance")
+    ci_demo.add_argument("--out-dir", type=Path, required=True)
+    ci_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
+    ci_demo.add_argument("--backend", choices=["classical", "qasm"], default="classical")
+    ci_demo.add_argument("--coupling-registry", type=Path, default=Path("tests/fixtures/coupling_registry_valid.json"))
+    ci_demo.add_argument("--signing-key", type=Path)
+    ci_demo.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    ci_demo.add_argument("--require-epoch", action="store_true")
+    ci_demo.add_argument("--anchor", type=Path)
+    ci_demo.add_argument("--sig", type=Path)
+    ci_demo.add_argument("--quantum-semantics-v1", action="store_true")
+
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
     invert_parser.add_argument("--out", type=Path, required=True)
@@ -119,6 +133,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_lifecycle(args)
         if args.command == "invert":
             return _cmd_invert(args)
+        if args.command == "demo":
+            return _cmd_demo(args)
     except HplError as exc:
         _write_refusal_evidence(
             command=args.command,
@@ -655,6 +671,186 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         return 0
 
 
+def _cmd_demo(args: argparse.Namespace) -> int:
+    if args.demo_name == "ci-governance":
+        return _cmd_demo_ci_governance(args)
+    print(_canonical_json({"ok": False, "errors": ["unknown demo"]}))
+    return 0
+
+
+def _cmd_demo_ci_governance(args: argparse.Namespace) -> int:
+    out_dir = args.out_dir
+    work_dir = out_dir / "work"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    repo_state_path = work_dir / "repo_state.json"
+    repo_state_path.write_text(_canonical_json({"clean": True}), encoding="utf-8")
+    repo_state_rel = Path("repo_state.json")
+
+    program_ir_path = work_dir / "program.ir.json"
+    plan_path = work_dir / "plan.json"
+    runtime_path = work_dir / "runtime.json"
+    backend_ir_path = work_dir / "backend.ir.json"
+
+    bundle_module = _load_bundle_module()
+    errors: List[str] = []
+
+    try:
+        program = parse_file(str(args.input))
+        expanded = expand_program(program)
+        validate_program(expanded)
+        program_ir = emit_program_ir(expanded, program_id=args.input.stem)
+        _write_json(program_ir_path, program_ir)
+
+        coupling_registry = _relative_to_root(args.coupling_registry)
+        ctx = SchedulerContext(
+            require_epoch_verification=args.require_epoch,
+            anchor_path=args.anchor,
+            signature_path=args.sig,
+            public_key_path=args.pub,
+            allowed_backends=_parse_backends("PYTHON,CLASSICAL,QASM"),
+            budget_steps=100,
+            emit_effect_steps=True,
+            backend_target=args.backend,
+            artifact_paths={
+                "backend_ir": "backend.ir.json",
+            },
+            track="ci_governance",
+            ci_repo_state_path=repo_state_rel,
+            ci_coupling_registry_path=coupling_registry,
+        )
+        plan_obj = plan_program(program_ir, ctx)
+        plan_dict = plan_obj.to_dict()
+        _write_json(plan_path, plan_dict)
+
+        plan_ok = plan_obj.status == "planned"
+        if not plan_ok:
+            errors.extend(plan_obj.reasons)
+
+        token_dict = plan_dict.get("execution_token")
+        execution_token = ExecutionToken.from_dict(token_dict) if isinstance(token_dict, dict) else None
+        runtime_ctx = RuntimeContext(
+            epoch_anchor_path=args.anchor,
+            epoch_sig_path=args.sig,
+            ci_pubkey_path=args.pub,
+            execution_token=execution_token,
+            requested_backend=_normalize_backend(args.backend),
+            trace_sink=work_dir,
+        )
+        allowed_steps = {str(step.get("step_id")) for step in plan_dict.get("steps", []) if isinstance(step, dict) and step.get("step_id")}
+        contract = ExecutionContract(allowed_steps=allowed_steps)
+        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        runtime_dict = runtime_result.to_dict()
+        _write_json(runtime_path, runtime_dict)
+
+        run_ok = runtime_result.status == "completed"
+        if runtime_result.reasons:
+            errors.extend(runtime_result.reasons)
+
+        artifacts = [
+            bundle_module._artifact("program_ir", program_ir_path),
+            bundle_module._artifact("plan", plan_path),
+            bundle_module._artifact("runtime_result", runtime_path),
+        ]
+        if backend_ir_path.exists():
+            artifacts.append(bundle_module._artifact("backend_ir", backend_ir_path))
+        if token_dict:
+            token_path = work_dir / "execution_token.json"
+            _write_json(token_path, token_dict)
+            artifacts.append(bundle_module._artifact("execution_token", token_path))
+
+        bundle_dir, manifest = bundle_module.build_bundle(
+            out_dir=out_dir,
+            artifacts=artifacts,
+            epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+            epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+            public_key=args.pub,
+            quantum_semantics_v1=args.quantum_semantics_v1,
+        )
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+        if not args.signing_key:
+            errors.append("signing_key required for ci-governance demo")
+        else:
+            sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+            ok, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                manifest_path,
+                sig_path,
+                args.pub,
+            )
+            if not ok:
+                errors.extend(sig_errors)
+
+        if args.quantum_semantics_v1:
+            quantum_module = _load_tool_module("validate_quantum_execution_semantics", ROOT / "tools" / "validate_quantum_execution_semantics.py")
+            quantum_result = quantum_module.validate_quantum_execution_semantics(
+                program_ir=program_ir_path,
+                plan=plan_path,
+                runtime_result=runtime_path,
+                backend_ir=backend_ir_path if backend_ir_path.exists() else None,
+                qasm=None,
+                bundle_manifest=manifest_path,
+            )
+            if not quantum_result.get("ok", False):
+                errors.extend(quantum_result.get("errors", []))
+
+        ok = plan_ok and run_ok and not errors
+        constraint_witness = None
+        dual_proposal = None
+        if not ok:
+            constraint_witness = build_constraint_witness(
+                stage="ci_governance_refusal",
+                refusal_reasons=errors,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
+            )
+            dual_proposal = invert_constraints(constraint_witness)
+            _write_json(work_dir / "constraint_witness.json", constraint_witness)
+            _write_json(work_dir / "dual_proposal.json", dual_proposal)
+
+            artifacts.append(bundle_module._artifact("constraint_witness", work_dir / "constraint_witness.json"))
+            artifacts.append(bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json"))
+
+            bundle_dir, manifest = bundle_module.build_bundle(
+                out_dir=out_dir,
+                artifacts=artifacts,
+                epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+                epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+                public_key=args.pub,
+                quantum_semantics_v1=args.quantum_semantics_v1,
+            )
+            manifest_path = bundle_dir / "bundle_manifest.json"
+            manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+            if args.signing_key:
+                sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+                ok_sig, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                    manifest_path,
+                    sig_path,
+                    args.pub,
+                )
+                if not ok_sig:
+                    errors.extend(sig_errors)
+
+        summary = {
+            "ok": ok,
+            "bundle_path": str(bundle_dir),
+            "bundle_id": manifest.get("bundle_id"),
+            "errors": list(errors),
+            "denied_reason": None if ok else "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+    except HplError as exc:
+        summary = {"ok": False, "errors": [str(exc)], "bundle_path": None, "bundle_id": None}
+        print(_canonical_json(summary))
+        return 0
+
+
 def _load_contract(contract_path: Optional[Path], plan_dict: Dict[str, object]) -> ExecutionContract:
     if contract_path and contract_path.exists():
         data = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -672,6 +868,14 @@ def _load_contract(contract_path: Optional[Path], plan_dict: Dict[str, object]) 
 
 def _load_bundle_module():
     spec = importlib.util.spec_from_file_location("bundle_evidence", BUNDLE_EVIDENCE_PATH)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_tool_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -760,6 +964,13 @@ def _digest_file(path: Path) -> Dict[str, str]:
     data = path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     return {"path": path.name, "digest": f"sha256:{digest}"}
+
+
+def _relative_to_root(path: Path) -> Path:
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
 
 
 if __name__ == "__main__":

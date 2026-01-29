@@ -4,12 +4,18 @@ from .handler_registry import get_handler, register_handler
 from .handlers import (
     handle_assert_contract,
     handle_bundle_evidence,
+    handle_check_repo_state,
     handle_emit_artifact,
     handle_invert_constraints,
     handle_lower_backend_ir,
     handle_lower_qasm,
     handle_noop,
     handle_select_measurement_track,
+    handle_sign_bundle,
+    handle_validate_coupling_topology,
+    handle_validate_quantum_semantics,
+    handle_validate_registries,
+    handle_verify_bundle,
     handle_verify_epoch,
     handle_verify_signature,
 )
@@ -21,6 +27,12 @@ register_handler(EffectType.ASSERT_CONTRACT, handle_assert_contract)
 register_handler(EffectType.VERIFY_EPOCH, handle_verify_epoch)
 register_handler(EffectType.VERIFY_SIGNATURE, handle_verify_signature)
 register_handler(EffectType.SELECT_MEASUREMENT_TRACK, handle_select_measurement_track)
+register_handler(EffectType.CHECK_REPO_STATE, handle_check_repo_state)
+register_handler(EffectType.VALIDATE_REGISTRIES, handle_validate_registries)
+register_handler(EffectType.VALIDATE_COUPLING_TOPOLOGY, handle_validate_coupling_topology)
+register_handler(EffectType.VALIDATE_QUANTUM_SEMANTICS, handle_validate_quantum_semantics)
+register_handler(EffectType.SIGN_BUNDLE, handle_sign_bundle)
+register_handler(EffectType.VERIFY_BUNDLE, handle_verify_bundle)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
 register_handler(EffectType.LOWER_QASM, handle_lower_qasm)
 register_handler(EffectType.BUNDLE_EVIDENCE, handle_bundle_evidence)

@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[4]
 VERIFY_EPOCH_PATH = ROOT / "tools" / "verify_epoch.py"
 VERIFY_SIGNATURE_PATH = ROOT / "tools" / "verify_anchor_signature.py"
 BUNDLE_EVIDENCE_PATH = ROOT / "tools" / "bundle_evidence.py"
+VALIDATE_REGISTRIES_PATH = ROOT / "tools" / "validate_operator_registries.py"
+VALIDATE_COUPLING_PATH = ROOT / "tools" / "validate_coupling_topology.py"
+VALIDATE_QUANTUM_PATH = ROOT / "tools" / "validate_quantum_execution_semantics.py"
 
 
 def handle_noop(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
@@ -122,6 +125,110 @@ def handle_select_measurement_track(step: EffectStep, ctx: RuntimeContext) -> Ef
         output_digest = _digest_bytes(out_path.read_bytes())
         return _ok(step, {out_path.name: output_digest, "boundary_conditions": input_digest})
     return _ok(step, {"measurement_selection": _digest_bytes(_canonical_json(result.selection).encode("utf-8")), "boundary_conditions": input_digest})
+
+
+def handle_check_repo_state(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_output_path(ctx, step.args, key="state_path")
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "RepoStateMissing", ["repo state missing"])
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "RepoStateInvalid", ["repo state invalid json"])
+    clean = state.get("clean")
+    if clean is not True:
+        return _refuse(step, "RepoStateNotClean", ["repo state not clean"], {state_path.name: _digest_bytes(state_path.read_bytes())})
+    return _ok(step, {state_path.name: _digest_bytes(state_path.read_bytes())})
+
+
+def handle_validate_registries(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    module = _load_tool("validate_operator_registries", VALIDATE_REGISTRIES_PATH)
+    schema = module._load_schema()
+    registry_paths = module._resolve_registry_paths([])
+    errors: List[str] = []
+    digests: Dict[str, str] = {}
+    for path in registry_paths:
+        errors.extend(module.validate_registry_file(path, schema))
+        digests[path.name] = _digest_bytes(path.read_bytes())
+    if errors:
+        return _refuse(step, "RegistryValidationFailed", errors, digests)
+    return _ok(step, digests)
+
+
+def handle_validate_coupling_topology(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    registry_path = _resolve_output_path(ctx, step.args, key="registry_path")
+    if registry_path is None or not registry_path.exists():
+        return _refuse(step, "CouplingRegistryMissing", ["coupling registry missing"])
+    module = _load_tool("validate_coupling_topology", VALIDATE_COUPLING_PATH)
+    errors = module.validate_coupling_registry_file(registry_path)
+    digest = _digest_bytes(registry_path.read_bytes())
+    if errors:
+        return _refuse(step, "CouplingTopologyInvalid", errors, {registry_path.name: digest})
+    return _ok(step, {registry_path.name: digest})
+
+
+def handle_validate_quantum_semantics(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    module = _load_tool("validate_quantum_execution_semantics", VALIDATE_QUANTUM_PATH)
+    program_ir = _resolve_output_path(ctx, step.args, key="program_ir")
+    plan = _resolve_output_path(ctx, step.args, key="plan")
+    runtime_result = _resolve_output_path(ctx, step.args, key="runtime_result")
+    backend_ir = _resolve_output_path(ctx, step.args, key="backend_ir")
+    qasm = _resolve_output_path(ctx, step.args, key="qasm")
+    bundle_manifest = _resolve_output_path(ctx, step.args, key="bundle_manifest")
+    result = module.validate_quantum_execution_semantics(
+        program_ir=program_ir,
+        plan=plan,
+        runtime_result=runtime_result,
+        backend_ir=backend_ir,
+        qasm=qasm,
+        bundle_manifest=bundle_manifest,
+    )
+    digests = {}
+    for path in [program_ir, plan, runtime_result, backend_ir, qasm, bundle_manifest]:
+        if path and path.exists():
+            digests[path.name] = _digest_bytes(path.read_bytes())
+    if not result.get("ok", False):
+        return _refuse(step, "QuantumSemanticsInvalid", result.get("errors", []), digests)
+    return _ok(step, digests)
+
+
+def handle_sign_bundle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    manifest_path = _resolve_output_path(ctx, step.args, key="bundle_manifest")
+    signing_key = _resolve_output_path(ctx, step.args, key="signing_key")
+    if manifest_path is None or signing_key is None:
+        return _refuse(step, "BundleSigningInputsMissing", ["bundle signing inputs missing"])
+    if not manifest_path.exists() or not signing_key.exists():
+        return _refuse(step, "BundleSigningInputsMissing", ["bundle signing inputs missing"])
+    bundle_module = _load_tool("bundle_evidence", BUNDLE_EVIDENCE_PATH)
+    signature_path = bundle_module.sign_bundle_manifest(manifest_path, signing_key)
+    digests = {
+        manifest_path.name: _digest_bytes(manifest_path.read_bytes()),
+        signature_path.name: _digest_bytes(signature_path.read_bytes()),
+    }
+    return _ok(step, digests)
+
+
+def handle_verify_bundle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    manifest_path = _resolve_output_path(ctx, step.args, key="bundle_manifest")
+    signature_path = _resolve_output_path(ctx, step.args, key="bundle_signature")
+    public_key = _resolve_output_path(ctx, step.args, key="public_key")
+    if manifest_path is None or signature_path is None or public_key is None:
+        return _refuse(step, "BundleVerificationInputsMissing", ["bundle verification inputs missing"])
+    if not manifest_path.exists() or not signature_path.exists() or not public_key.exists():
+        return _refuse(step, "BundleVerificationInputsMissing", ["bundle verification inputs missing"])
+    bundle_module = _load_tool("bundle_evidence", BUNDLE_EVIDENCE_PATH)
+    ok, errors = bundle_module.verify_bundle_manifest_signature(
+        manifest_path,
+        signature_path,
+        public_key,
+    )
+    digests = {
+        manifest_path.name: _digest_bytes(manifest_path.read_bytes()),
+        signature_path.name: _digest_bytes(signature_path.read_bytes()),
+    }
+    if not ok:
+        return _refuse(step, "BundleSignatureInvalid", errors, digests)
+    return _ok(step, digests)
 
 def handle_lower_backend_ir(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     program_ir = _program_ir_from_args(step.args)
@@ -239,7 +346,7 @@ def _resolve_output_path(
     path = Path(str(value))
     if path.is_absolute():
         return path
-    if key in {"pub", "epoch_anchor", "epoch_sig", "anchor_path", "sig_path", "witness_path"}:
+    if key in {"pub", "epoch_anchor", "epoch_sig", "anchor_path", "sig_path", "witness_path", "registry_path"}:
         return ROOT / path
     if ctx.trace_sink is None:
         return path
