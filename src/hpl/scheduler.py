@@ -36,6 +36,8 @@ class SchedulerContext:
     emit_effect_steps: bool = False
     backend_target: Optional[str] = None
     artifact_paths: Optional[Dict[str, str]] = None
+    ecmo_input_path: Optional[Path] = None
+    measurement_selection_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +158,19 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         nonlocal index
         steps.append(step)
         index += 1
+
+    if ctx.ecmo_input_path:
+        selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
+        if ctx.measurement_selection_path:
+            selection_args["out_path"] = str(ctx.measurement_selection_path)
+        add_step(
+            {
+                "step_id": f"select_measurement_track_{index}",
+                "effect_type": "SELECT_MEASUREMENT_TRACK",
+                "args": selection_args,
+                "requires": {},
+            }
+        )
 
     if ctx.require_epoch_verification and ctx.anchor_path:
         add_step(

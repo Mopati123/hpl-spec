@@ -90,6 +90,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
+    lifecycle_parser.add_argument("--ecmo-input", type=Path)
     lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
@@ -404,6 +405,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
     runtime_path = work_dir / "runtime.json"
     backend_ir_path = work_dir / "backend.ir.json"
     qasm_path = work_dir / "program.qasm"
+    measurement_selection_path = work_dir / "measurement_selection.json"
 
     try:
         # IR
@@ -433,6 +435,8 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             emit_effect_steps=use_kernel,
             backend_target=args.backend,
             artifact_paths=None,
+            ecmo_input_path=args.ecmo_input,
+            measurement_selection_path=measurement_selection_path,
         )
         plan_obj = plan_program(program_ir, ctx)
         plan_dict = plan_obj.to_dict()
@@ -540,6 +544,10 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         if args.backend == "qasm":
             if qasm_path.exists():
                 artifacts.append(bundle_module._artifact("qasm", qasm_path))
+        if measurement_selection_path.exists():
+            artifacts.append(
+                bundle_module._artifact("measurement_selection", measurement_selection_path)
+            )
         bundle_errors: List[str] = []
         if args.anchor:
             if args.anchor.exists():

@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools import bundle_evidence
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = [sys.executable, "-m", "hpl.cli"]
 
@@ -198,6 +200,67 @@ class CliLifecycleTests(unittest.TestCase):
             manifest = json.loads(bundle.read_text(encoding="utf-8"))
             roles = {entry["role"] for entry in manifest["artifacts"]}
             self.assertIn("constraint_witness", roles)
+
+    def test_lifecycle_ecmo_selection_in_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            boundary_path = ROOT / "tests/fixtures/ecmo_boundary_ci.json"
+            result = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "classical",
+                    "--out-dir",
+                    str(out_dir),
+                    "--ecmo-input",
+                    str(boundary_path),
+                ]
+            )
+            self.assertEqual(result.returncode, 0)
+            summary = json.loads(result.stdout)
+            self.assertTrue(summary["ok"])
+            bundle_path = Path(summary["bundle_path"])
+            manifest_path = bundle_path / "bundle_manifest.json"
+            roles = {entry["role"] for entry in json.loads(manifest_path.read_text(encoding="utf-8"))["artifacts"]}
+            self.assertIn("measurement_selection", roles)
+
+            sig_path = bundle_evidence.sign_bundle_manifest(
+                manifest_path,
+                ROOT / "tests/fixtures/keys/ci_ed25519_test.sk",
+            )
+            ok, errors = bundle_evidence.verify_bundle_manifest_signature(
+                manifest_path,
+                sig_path,
+                ROOT / "tests/fixtures/keys/ci_ed25519_test.pub",
+            )
+            self.assertTrue(ok, errors)
+
+    def test_lifecycle_ecmo_refusal(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            boundary_path = ROOT / "tests/fixtures/ecmo_boundary_ambiguous.json"
+            result = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "classical",
+                    "--out-dir",
+                    str(out_dir),
+                    "--ecmo-input",
+                    str(boundary_path),
+                    "--constraint-inversion-v1",
+                ]
+            )
+            self.assertEqual(result.returncode, 0)
+            summary = json.loads(result.stdout)
+            self.assertFalse(summary["ok"])
+            bundle_path = Path(summary["bundle_path"])
+            manifest = json.loads((bundle_path / "bundle_manifest.json").read_text(encoding="utf-8"))
+            roles = {entry["role"] for entry in manifest["artifacts"]}
+            self.assertIn("constraint_witness", roles)
+            self.assertIn("dual_proposal", roles)
             self.assertIn("dual_proposal", roles)
 
     def test_lifecycle_legacy_path(self):

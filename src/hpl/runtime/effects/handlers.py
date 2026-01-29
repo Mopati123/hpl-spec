@@ -10,6 +10,7 @@ from ...backends.classical_lowering import lower_program_ir_to_backend_ir
 from ...backends.qasm_lowering import lower_backend_ir_to_qasm
 from ..context import RuntimeContext
 from .effect_step import EffectResult, EffectStep
+from .measurement_selection import build_measurement_selection
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -82,6 +83,45 @@ def handle_verify_signature(step: EffectStep, ctx: RuntimeContext) -> EffectResu
         return _ok(step, digests)
     return _refuse(step, "SignatureVerificationFailed", errors, digests)
 
+
+def handle_select_measurement_track(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    input_value = step.args.get("input_path") or step.args.get("boundary_conditions_path")
+    if input_value is None:
+        return _refuse(step, "BoundaryConditionsMissing", ["boundary conditions missing"])
+    input_path = Path(str(input_value))
+    if not input_path.is_absolute():
+        candidate = ROOT / input_path
+        if candidate.exists():
+            input_path = candidate
+    if not input_path.exists():
+        return _refuse(step, "BoundaryConditionsMissing", [f"input not found: {input_path}"])
+
+    try:
+        boundary_conditions = json.loads(input_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "BoundaryConditionsInvalid", ["invalid boundary conditions json"])
+
+    result = build_measurement_selection(boundary_conditions)
+    input_digest = _digest_bytes(input_path.read_bytes())
+    if not result.ok or not result.selection:
+        return _refuse(
+            step,
+            "ECMOSelectionFailed",
+            result.errors or ["selection failed"],
+            {"boundary_conditions": input_digest},
+        )
+
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="measurement_selection.json",
+    )
+    if out_path:
+        out_path.write_text(_canonical_json(result.selection), encoding="utf-8")
+        output_digest = _digest_bytes(out_path.read_bytes())
+        return _ok(step, {out_path.name: output_digest, "boundary_conditions": input_digest})
+    return _ok(step, {"measurement_selection": _digest_bytes(_canonical_json(result.selection).encode("utf-8")), "boundary_conditions": input_digest})
 
 def handle_lower_backend_ir(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     program_ir = _program_ir_from_args(step.args)

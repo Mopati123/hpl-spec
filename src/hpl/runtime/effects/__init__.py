@@ -9,6 +9,7 @@ from .handlers import (
     handle_lower_backend_ir,
     handle_lower_qasm,
     handle_noop,
+    handle_select_measurement_track,
     handle_verify_epoch,
     handle_verify_signature,
 )
@@ -19,6 +20,7 @@ register_handler(EffectType.EMIT_ARTIFACT, handle_emit_artifact)
 register_handler(EffectType.ASSERT_CONTRACT, handle_assert_contract)
 register_handler(EffectType.VERIFY_EPOCH, handle_verify_epoch)
 register_handler(EffectType.VERIFY_SIGNATURE, handle_verify_signature)
+register_handler(EffectType.SELECT_MEASUREMENT_TRACK, handle_select_measurement_track)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
 register_handler(EffectType.LOWER_QASM, handle_lower_qasm)
 register_handler(EffectType.BUNDLE_EVIDENCE, handle_bundle_evidence)
