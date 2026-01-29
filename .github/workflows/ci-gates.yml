@@ -45,4 +45,58 @@ jobs:
         run: python tools/verify_anchor_signature.py artifacts/epoch_ci.anchor.json artifacts/epoch_ci.anchor.sig --public-key config/keys/ci_ed25519.pub
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
+      - name: Lifecycle - Run (Kernel Default)
+        env:
+          PYTHONPATH: src
+        run: |
+          mkdir -p artifacts/lifecycle
+          python -m hpl.cli lifecycle examples/momentum_trade.hpl --backend classical --out-dir artifacts/lifecycle --quantum-semantics-v1 > artifacts/lifecycle/summary.json
+      - name: Bundle - Sign Manifest
+        env:
+          HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools import bundle_evidence
+
+          summary_path = Path("artifacts/lifecycle/summary.json")
+          if not summary_path.exists():
+              raise SystemExit("missing lifecycle summary")
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          bundle_path = Path(summary.get("bundle_path", ""))
+          if not bundle_path.exists():
+              raise SystemExit("missing bundle path")
+          manifest_path = bundle_path / "bundle_manifest.json"
+          if not manifest_path.exists():
+              raise SystemExit("missing bundle_manifest.json")
+
+          seed = os.environ.get("HPL_CI_ED25519_PRIVATE_KEY", "").strip()
+          if not seed:
+              raise SystemExit("missing HPL_CI_ED25519_PRIVATE_KEY")
+          key_path = Path("artifacts/ci_bundle_signing.key")
+          key_path.write_text(seed, encoding="utf-8")
+          bundle_evidence.sign_bundle_manifest(manifest_path, key_path)
+          key_path.unlink(missing_ok=True)
+          PY
+      - name: Bundle - Verify Manifest Signature
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import bundle_evidence
+
+          summary = json.loads(Path("artifacts/lifecycle/summary.json").read_text(encoding="utf-8"))
+          bundle_path = Path(summary.get("bundle_path", ""))
+          manifest_path = bundle_path / "bundle_manifest.json"
+          signature_path = manifest_path.with_suffix(".sig")
+          ok, errors = bundle_evidence.verify_bundle_manifest_signature(
+              manifest_path,
+              signature_path,
+              Path("config/keys/ci_ed25519.pub"),
+          )
+          if not ok:
+              raise SystemExit(f"bundle signature verification failed: {errors}")
+          PY
 
