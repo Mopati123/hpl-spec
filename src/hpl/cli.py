@@ -26,6 +26,7 @@ from .execution_token import ExecutionToken
 from .scheduler import SchedulerContext, plan as plan_program
 from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
+from .runtime.effects.measurement_selection import build_measurement_selection
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -93,6 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--quantum-semantics-v1", action="store_true")
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
     lifecycle_parser.add_argument("--ecmo-input", type=Path)
+    lifecycle_parser.add_argument("--ecmo", type=Path)
     lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
@@ -441,26 +443,72 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             outputs={"program_ir": _digest_file(program_ir_path)},
         )
 
+        # ECMO selection (optional)
+        ecmo_input = args.ecmo or args.ecmo_input
+        selected_track = None
+        ecmo_errors: List[str] = []
+        require_epoch = args.require_epoch
+        backend = args.backend
+        constraint_inversion = args.constraint_inversion_v1
+        if ecmo_input:
+            if not ecmo_input.exists():
+                ecmo_errors.append(f"ecmo input not found: {ecmo_input}")
+            else:
+                boundary_conditions = json.loads(ecmo_input.read_text(encoding="utf-8"))
+                selection_result = build_measurement_selection(boundary_conditions)
+                if selection_result.ok and selection_result.selection:
+                    selected_track = selection_result.selection.get("selected_track")
+                    _write_json(measurement_selection_path, selection_result.selection)
+                    if selected_track == "B":
+                        require_epoch = True
+                    elif selected_track == "C":
+                        backend = "classical"
+                        constraint_inversion = True
+                else:
+                    ecmo_errors.extend(selection_result.errors)
+
         # Plan
         use_kernel = not args.legacy
-        ctx = SchedulerContext(
-            require_epoch_verification=args.require_epoch,
-            anchor_path=args.anchor,
-            signature_path=args.sig,
-            public_key_path=args.pub,
-            allowed_backends=_parse_backends(args.allowed_backends),
-            budget_steps=args.budget_steps,
-            emit_effect_steps=use_kernel,
-            backend_target=args.backend,
-            artifact_paths=None,
-            ecmo_input_path=args.ecmo_input,
-            measurement_selection_path=measurement_selection_path,
-        )
-        plan_obj = plan_program(program_ir, ctx)
-        plan_dict = plan_obj.to_dict()
-        _write_json(plan_path, plan_dict)
-        plan_ok = plan_obj.status == "planned"
-        plan_errors = list(plan_obj.reasons)
+        if ecmo_errors:
+            plan_ok = False
+            plan_errors = list(ecmo_errors)
+            plan_core = {
+                "program_id": args.input.stem,
+                "status": "denied",
+                "steps": [],
+                "reasons": list(plan_errors),
+            }
+            plan_dict = {
+                "plan_id": _digest_text(_canonical_json(plan_core)),
+                "program_id": args.input.stem,
+                "status": "denied",
+                "steps": [],
+                "reasons": list(plan_errors),
+                "verification": None,
+                "witness_records": [],
+                "execution_token": None,
+            }
+            _write_json(plan_path, plan_dict)
+        else:
+            ctx = SchedulerContext(
+                require_epoch_verification=require_epoch,
+                anchor_path=args.anchor,
+                signature_path=args.sig,
+                public_key_path=args.pub,
+                allowed_backends=_parse_backends(args.allowed_backends),
+                budget_steps=args.budget_steps,
+                emit_effect_steps=use_kernel,
+                backend_target=backend,
+                artifact_paths=None,
+                ecmo_input_path=args.ecmo_input,
+                measurement_selection_path=measurement_selection_path,
+            )
+            plan_obj = plan_program(program_ir, ctx)
+            plan_dict = plan_obj.to_dict()
+            _write_json(plan_path, plan_dict)
+            plan_ok = plan_obj.status == "planned"
+            plan_errors = list(plan_obj.reasons)
+
         _write_evidence(
             work_dir / "plan_evidence.json",
             command="plan",
@@ -471,40 +519,56 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         )
 
         # Runtime
-        token_dict = plan_dict.get("execution_token")
-        execution_token = None
-        if isinstance(token_dict, dict):
-            execution_token = ExecutionToken.from_dict(token_dict)
-        runtime_ctx = RuntimeContext(
-            epoch_anchor_path=args.anchor,
-            epoch_sig_path=args.sig,
-            ci_pubkey_path=args.pub,
-            execution_token=execution_token,
-            requested_backend=_normalize_backend(args.backend),
-            trace_sink=work_dir if use_kernel else None,
-        )
-        allowed_steps = set()
-        for step in plan_dict.get("steps", []):
-            if not isinstance(step, dict):
-                continue
-            step_id = step.get("step_id") or step.get("operator_id")
-            if step_id:
-                allowed_steps.add(str(step_id))
-        contract = ExecutionContract(
-            allowed_steps=allowed_steps,
-            require_epoch_verification=False if use_kernel else args.require_epoch,
-            require_signature_verification=False if use_kernel else bool(args.sig) if args.require_epoch else False,
-            required_backend=None if use_kernel else _normalize_backend(args.backend),
-        )
-        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
-        runtime_dict = runtime_result.to_dict()
+        if ecmo_errors:
+            run_ok = False
+            runtime_errors = list(plan_errors)
+            runtime_dict = {
+                "result_id": _digest_text(_canonical_json({"status": "denied", "reasons": runtime_errors})),
+                "status": "denied",
+                "reasons": list(runtime_errors),
+                "steps": [],
+                "verification": None,
+                "witness_records": [],
+                "constraint_witnesses": [],
+                "transcript": [],
+            }
+        else:
+            token_dict = plan_dict.get("execution_token")
+            execution_token = None
+            if isinstance(token_dict, dict):
+                execution_token = ExecutionToken.from_dict(token_dict)
+            runtime_ctx = RuntimeContext(
+                epoch_anchor_path=args.anchor,
+                epoch_sig_path=args.sig,
+                ci_pubkey_path=args.pub,
+                execution_token=execution_token,
+                requested_backend=_normalize_backend(backend),
+                trace_sink=work_dir if use_kernel else None,
+            )
+            allowed_steps = set()
+            for step in plan_dict.get("steps", []):
+                if not isinstance(step, dict):
+                    continue
+                step_id = step.get("step_id") or step.get("operator_id")
+                if step_id:
+                    allowed_steps.add(str(step_id))
+            contract = ExecutionContract(
+                allowed_steps=allowed_steps,
+                require_epoch_verification=False if use_kernel else require_epoch,
+                require_signature_verification=False if use_kernel else bool(args.sig) if require_epoch else False,
+                required_backend=None if use_kernel else _normalize_backend(backend),
+            )
+            runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+            runtime_dict = runtime_result.to_dict()
+            run_ok = runtime_result.status == "completed"
+            runtime_errors = list(runtime_result.reasons)
+
         _write_json(runtime_path, runtime_dict)
-        run_ok = runtime_result.status == "completed"
         _write_evidence(
             work_dir / "run_evidence.json",
             command="run",
             ok=run_ok,
-            errors=list(runtime_result.reasons),
+            errors=list(runtime_errors),
             inputs={"plan": _digest_file(plan_path)},
             outputs={"runtime_result": _digest_file(runtime_path)},
         )
@@ -521,8 +585,9 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                 timestamp=None,
             )
         elif not run_ok:
-            if runtime_result.constraint_witnesses:
-                constraint_witness = runtime_result.constraint_witnesses[0]
+            constraint_list = runtime_dict.get("constraint_witnesses", [])
+            if isinstance(constraint_list, list) and constraint_list:
+                constraint_witness = constraint_list[0]
         if constraint_witness:
             dual_proposal = invert_constraints(constraint_witness)
             _write_json(work_dir / "constraint_witness.json", constraint_witness)
@@ -530,10 +595,10 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
 
         # Lower
         if not use_kernel:
-            backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
+            backend_ir = lower_program_ir_to_backend_ir(program_ir, target=backend).to_dict()
             _write_json(backend_ir_path, backend_ir)
             output_digests = {"backend_ir": _digest_text_value(_canonical_json(backend_ir))}
-            if args.backend == "qasm":
+            if backend == "qasm":
                 qasm = lower_backend_ir_to_qasm(backend_ir)
                 qasm_path.write_text(qasm, encoding="utf-8")
                 output_digests["qasm"] = _digest_text_value(qasm)
@@ -559,7 +624,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             artifacts.append(bundle_module._artifact("execution_token", token_path))
         if backend_ir_path.exists():
             artifacts.append(bundle_module._artifact("backend_ir", backend_ir_path))
-        if args.backend == "qasm":
+        if backend == "qasm":
             if qasm_path.exists():
                 artifacts.append(bundle_module._artifact("qasm", qasm_path))
         if measurement_selection_path.exists():
@@ -606,8 +671,8 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         ok = plan_ok and run_ok
         if plan_errors:
             errors.extend(plan_errors)
-        if runtime_result.reasons:
-            errors.extend(runtime_result.reasons)
+        if runtime_errors:
+            errors.extend(runtime_errors)
         if bundle_errors:
             ok = False
             errors.extend(bundle_errors)
