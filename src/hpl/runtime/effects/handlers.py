@@ -51,7 +51,7 @@ def handle_assert_contract(step: EffectStep, ctx: RuntimeContext) -> EffectResul
 
 
 def handle_verify_epoch(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
-    anchor_path = _path_arg(step, "anchor_path")
+    anchor_path = _resolve_output_path(ctx, step.args, key="anchor_path")
     if anchor_path is None or not anchor_path.exists():
         return _refuse(step, "AnchorMissing", ["anchor not found"])
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
@@ -64,9 +64,9 @@ def handle_verify_epoch(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
 
 
 def handle_verify_signature(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
-    anchor_path = _path_arg(step, "anchor_path")
-    sig_path = _path_arg(step, "sig_path")
-    pub_path = _path_arg(step, "pub_path")
+    anchor_path = _resolve_output_path(ctx, step.args, key="anchor_path")
+    sig_path = _resolve_output_path(ctx, step.args, key="sig_path")
+    pub_path = _resolve_output_path(ctx, step.args, key="pub_path")
     if anchor_path is None or sig_path is None or pub_path is None:
         return _refuse(step, "SignatureInputsMissing", ["missing signature inputs"])
     if not anchor_path.exists() or not sig_path.exists() or not pub_path.exists():

@@ -44,6 +44,8 @@ class CliLifecycleTests(unittest.TestCase):
             self.assertEqual(result_one.returncode, 0)
             summary_one = json.loads(result_one.stdout)
             self.assertTrue(summary_one["bundle_id"])
+            plan_one = json.loads((out_one / "work" / "plan.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("effect_type" in step for step in plan_one.get("steps", [])))
 
         with tempfile.TemporaryDirectory() as tmp_dir_two:
             out_two = Path(tmp_dir_two) / "out"
@@ -197,6 +199,24 @@ class CliLifecycleTests(unittest.TestCase):
             roles = {entry["role"] for entry in manifest["artifacts"]}
             self.assertIn("constraint_witness", roles)
             self.assertIn("dual_proposal", roles)
+
+    def test_lifecycle_legacy_path(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            result = _run_cmd(
+                [
+                    "lifecycle",
+                    "examples/momentum_trade.hpl",
+                    "--backend",
+                    "classical",
+                    "--out-dir",
+                    str(out_dir),
+                    "--legacy",
+                ]
+            )
+            self.assertEqual(result.returncode, 0)
+            plan = json.loads((out_dir / "work" / "plan.json").read_text(encoding="utf-8"))
+            self.assertFalse(any("effect_type" in step for step in plan.get("steps", [])))
 
 
 if __name__ == "__main__":

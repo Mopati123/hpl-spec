@@ -92,7 +92,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--constraint-inversion-v1", action="store_true")
     lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
-    lifecycle_parser.add_argument("--kernel", action="store_true")
+    lifecycle_parser.add_argument("--legacy", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -422,6 +422,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
         )
 
         # Plan
+        use_kernel = not args.legacy
         ctx = SchedulerContext(
             require_epoch_verification=args.require_epoch,
             anchor_path=args.anchor,
@@ -429,7 +430,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             public_key_path=args.pub,
             allowed_backends=_parse_backends(args.allowed_backends),
             budget_steps=args.budget_steps,
-            emit_effect_steps=args.kernel,
+            emit_effect_steps=use_kernel,
             backend_target=args.backend,
             artifact_paths=None,
         )
@@ -458,7 +459,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             requested_backend=_normalize_backend(args.backend),
-            trace_sink=work_dir if args.kernel else None,
+            trace_sink=work_dir if use_kernel else None,
         )
         allowed_steps = set()
         for step in plan_dict.get("steps", []):
@@ -469,9 +470,9 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                 allowed_steps.add(str(step_id))
         contract = ExecutionContract(
             allowed_steps=allowed_steps,
-            require_epoch_verification=False if args.kernel else args.require_epoch,
-            require_signature_verification=False if args.kernel else bool(args.sig) if args.require_epoch else False,
-            required_backend=None if args.kernel else _normalize_backend(args.backend),
+            require_epoch_verification=False if use_kernel else args.require_epoch,
+            require_signature_verification=False if use_kernel else bool(args.sig) if args.require_epoch else False,
+            required_backend=None if use_kernel else _normalize_backend(args.backend),
         )
         runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
         runtime_dict = runtime_result.to_dict()
@@ -506,7 +507,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             _write_json(work_dir / "dual_proposal.json", dual_proposal)
 
         # Lower
-        if not args.kernel:
+        if not use_kernel:
             backend_ir = lower_program_ir_to_backend_ir(program_ir, target=args.backend).to_dict()
             _write_json(backend_ir_path, backend_ir)
             output_digests = {"backend_ir": _digest_text_value(_canonical_json(backend_ir))}

@@ -39,7 +39,6 @@ class FullLifecycleKernelTests(unittest.TestCase):
                     "qasm",
                     "--out-dir",
                     str(out_dir),
-                    "--kernel",
                     "--quantum-semantics-v1",
                 ]
             )
@@ -62,7 +61,6 @@ class FullLifecycleKernelTests(unittest.TestCase):
                     "qasm",
                     "--out-dir",
                     str(out_dir),
-                    "--kernel",
                     "--quantum-semantics-v1",
                 ]
             )
@@ -81,7 +79,6 @@ class FullLifecycleKernelTests(unittest.TestCase):
                     "qasm",
                     "--out-dir",
                     str(out_dir),
-                    "--kernel",
                     "--allowed-backends",
                     "CLASSICAL",
                     "--constraint-inversion-v1",
