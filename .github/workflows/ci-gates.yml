@@ -99,4 +99,23 @@ jobs:
           if not ok:
               raise SystemExit(f"bundle signature verification failed: {errors}")
           PY
+      - name: Bundle - Locate Directory
+        id: bundle_path
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("artifacts/lifecycle/summary.json").read_text(encoding="utf-8"))
+          bundle_path = Path(summary.get("bundle_path", ""))
+          if not bundle_path.exists():
+              raise SystemExit("missing bundle path for upload")
+          output = Path(__import__("os").environ["GITHUB_OUTPUT"])
+          output.write_text(f"bundle_dir={bundle_path}\n", encoding="utf-8")
+          PY
+      - name: Bundle - Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hpl-bundle-${{ github.sha }}
+          path: ${{ steps.bundle_path.outputs.bundle_dir }}
 
