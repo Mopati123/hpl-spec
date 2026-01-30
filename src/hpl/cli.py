@@ -122,6 +122,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     agent_demo.add_argument("--require-epoch", action="store_true")
     agent_demo.add_argument("--anchor", type=Path)
     agent_demo.add_argument("--sig", type=Path)
+    trading_demo = demo_subparsers.add_parser("trading-paper")
+    trading_demo.add_argument("--out-dir", type=Path, required=True)
+    trading_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
+    trading_demo.add_argument("--market-fixture", type=Path, default=Path("tests/fixtures/trading/price_series_simple.json"))
+    trading_demo.add_argument("--policy", type=Path, default=Path("tests/fixtures/trading/policy_safe.json"))
+    trading_demo.add_argument("--signing-key", type=Path)
+    trading_demo.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    trading_demo.add_argument("--require-epoch", action="store_true")
+    trading_demo.add_argument("--anchor", type=Path)
+    trading_demo.add_argument("--sig", type=Path)
+    trading_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
+    trading_demo.add_argument("--budget-steps", type=int, default=100)
+    trading_demo.add_argument("--constraint-inversion-v1", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -751,6 +764,8 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         return _cmd_demo_ci_governance(args)
     if args.demo_name == "agent-governance":
         return _cmd_demo_agent_governance(args)
+    if args.demo_name == "trading-paper":
+        return _cmd_demo_trading_paper(args)
     print(_canonical_json({"ok": False, "errors": ["unknown demo"]}))
     return 0
 
@@ -1069,6 +1084,170 @@ def _cmd_demo_agent_governance(args: argparse.Namespace) -> int:
                 epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
                 epoch_sig=args.sig if args.sig and args.sig.exists() else None,
                 public_key=args.pub,
+            )
+            manifest_path = bundle_dir / "bundle_manifest.json"
+            manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+            if args.signing_key:
+                sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+                ok_sig, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                    manifest_path,
+                    sig_path,
+                    args.pub,
+                )
+                if not ok_sig:
+                    errors.extend(sig_errors)
+
+        summary = {
+            "ok": ok,
+            "bundle_path": str(bundle_dir),
+            "bundle_id": manifest.get("bundle_id"),
+            "errors": list(errors),
+            "denied_reason": None if ok else "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+    except HplError as exc:
+        summary = {"ok": False, "errors": [str(exc)], "bundle_path": None, "bundle_id": None}
+        print(_canonical_json(summary))
+        return 0
+
+
+def _cmd_demo_trading_paper(args: argparse.Namespace) -> int:
+    out_dir = args.out_dir
+    work_dir = out_dir / "work"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    program_ir_path = work_dir / "program.ir.json"
+    plan_path = work_dir / "plan.json"
+    runtime_path = work_dir / "runtime.json"
+    report_json_path = work_dir / "trade_report.json"
+    report_md_path = work_dir / "trade_report.md"
+
+    bundle_module = _load_bundle_module()
+    errors: List[str] = []
+
+    try:
+        program = parse_file(str(args.input))
+        expanded = expand_program(program)
+        validate_program(expanded)
+        program_ir = emit_program_ir(expanded, program_id=args.input.stem)
+        _write_json(program_ir_path, program_ir)
+
+        fixture_path = _relative_to_root(args.market_fixture)
+        policy_path = _relative_to_root(args.policy)
+
+        ctx = SchedulerContext(
+            require_epoch_verification=args.require_epoch,
+            anchor_path=args.anchor,
+            signature_path=args.sig,
+            public_key_path=args.pub,
+            allowed_backends=_parse_backends(args.allowed_backends),
+            budget_steps=args.budget_steps,
+            emit_effect_steps=True,
+            track="trading_paper_mode",
+            trading_fixture_path=fixture_path,
+            trading_policy_path=policy_path,
+            trading_report_json_path=Path("trade_report.json"),
+            trading_report_md_path=Path("trade_report.md"),
+        )
+        plan_obj = plan_program(program_ir, ctx)
+        plan_dict = plan_obj.to_dict()
+        _write_json(plan_path, plan_dict)
+
+        plan_ok = plan_obj.status == "planned"
+        if not plan_ok:
+            errors.extend(plan_obj.reasons)
+
+        token_dict = plan_dict.get("execution_token")
+        execution_token = ExecutionToken.from_dict(token_dict) if isinstance(token_dict, dict) else None
+        runtime_ctx = RuntimeContext(
+            epoch_anchor_path=args.anchor,
+            epoch_sig_path=args.sig,
+            ci_pubkey_path=args.pub,
+            execution_token=execution_token,
+            trace_sink=work_dir,
+        )
+        allowed_steps = {
+            str(step.get("step_id"))
+            for step in plan_dict.get("steps", [])
+            if isinstance(step, dict) and step.get("step_id")
+        }
+        contract = ExecutionContract(allowed_steps=allowed_steps)
+        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        runtime_dict = runtime_result.to_dict()
+        _write_json(runtime_path, runtime_dict)
+
+        run_ok = runtime_result.status == "completed"
+        if runtime_result.reasons:
+            errors.extend(runtime_result.reasons)
+
+        artifacts = [
+            bundle_module._artifact("program_ir", program_ir_path),
+            bundle_module._artifact("plan", plan_path),
+            bundle_module._artifact("runtime_result", runtime_path),
+            bundle_module._artifact("market_fixture", args.market_fixture),
+            bundle_module._artifact("trade_policy", args.policy),
+        ]
+        if report_json_path.exists():
+            artifacts.append(bundle_module._artifact("trade_report", report_json_path))
+        if report_md_path.exists():
+            artifacts.append(bundle_module._artifact("trade_report_md", report_md_path))
+        if token_dict:
+            token_path = work_dir / "execution_token.json"
+            _write_json(token_path, token_dict)
+            artifacts.append(bundle_module._artifact("execution_token", token_path))
+
+        bundle_dir, manifest = bundle_module.build_bundle(
+            out_dir=out_dir,
+            artifacts=artifacts,
+            epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+            epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+            public_key=args.pub,
+            constraint_inversion_v1=args.constraint_inversion_v1,
+        )
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+        if not args.signing_key:
+            errors.append("signing_key required for trading-paper demo")
+        else:
+            sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+            ok, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                manifest_path,
+                sig_path,
+                args.pub,
+            )
+            if not ok:
+                errors.extend(sig_errors)
+
+        ok = plan_ok and run_ok and not errors
+        constraint_witness = None
+        dual_proposal = None
+        if not ok:
+            constraint_witness = build_constraint_witness(
+                stage="trading_paper_refusal",
+                refusal_reasons=errors,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
+            )
+            dual_proposal = invert_constraints(constraint_witness)
+            _write_json(work_dir / "constraint_witness.json", constraint_witness)
+            _write_json(work_dir / "dual_proposal.json", dual_proposal)
+
+            artifacts.append(bundle_module._artifact("constraint_witness", work_dir / "constraint_witness.json"))
+            artifacts.append(bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json"))
+
+            bundle_dir, manifest = bundle_module.build_bundle(
+                out_dir=out_dir,
+                artifacts=artifacts,
+                epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+                epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+                public_key=args.pub,
+                constraint_inversion_v1=args.constraint_inversion_v1,
             )
             manifest_path = bundle_dir / "bundle_manifest.json"
             manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
