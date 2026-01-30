@@ -192,6 +192,250 @@ def handle_validate_quantum_semantics(step: EffectStep, ctx: RuntimeContext) -> 
     return _ok(step, digests)
 
 
+def handle_ingest_market_fixture(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    fixture_path = _resolve_output_path(ctx, step.args, key="fixture_path")
+    if fixture_path is None or not fixture_path.exists():
+        return _refuse(step, "MarketFixtureMissing", ["market fixture missing"])
+    try:
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "MarketFixtureInvalid", ["market fixture invalid json"])
+    if not isinstance(fixture, dict):
+        return _refuse(step, "MarketFixtureInvalid", ["market fixture must be an object"])
+    prices = fixture.get("prices")
+    if not isinstance(prices, list) or not prices:
+        return _refuse(step, "MarketFixtureInvalid", ["prices missing or empty"])
+    prices = [float(value) for value in prices]
+    snapshot = {
+        "symbol": fixture.get("symbol", "UNKNOWN"),
+        "prices": prices,
+        "count": len(prices),
+        "first_price": _round_price(prices[0]),
+        "last_price": _round_price(prices[-1]),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="market_snapshot.json",
+    )
+    payload = _canonical_json(snapshot)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {fixture_path.name: _digest_bytes(fixture_path.read_bytes()), "market_snapshot": digest})
+
+
+def handle_compute_signal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
+    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    if snapshot_path is None or policy_path is None:
+        return _refuse(step, "SignalInputsMissing", ["market snapshot or policy missing"])
+    if not snapshot_path.exists() or not policy_path.exists():
+        return _refuse(step, "SignalInputsMissing", ["market snapshot or policy missing"])
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    prices = snapshot.get("prices", [])
+    if not isinstance(prices, list) or not prices:
+        return _refuse(step, "SignalInputsMissing", ["prices missing"])
+    first_price = float(prices[0])
+    last_price = float(prices[-1])
+    threshold = float(policy.get("signal_threshold", 0.0))
+    change = last_price - first_price
+    change_pct = change / first_price if first_price else 0.0
+    action = "HOLD"
+    if change_pct >= threshold:
+        action = "BUY"
+    elif change_pct <= -threshold:
+        action = "SELL"
+    signal = {
+        "action": action,
+        "threshold": _round_price(threshold),
+        "price_change": _round_price(change),
+        "price_change_pct": _round_price(change_pct),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="signal.json",
+    )
+    payload = _canonical_json(signal)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(
+        step,
+        {
+            snapshot_path.name: _digest_bytes(snapshot_path.read_bytes()),
+            policy_path.name: _digest_bytes(policy_path.read_bytes()),
+            "signal": digest,
+        },
+    )
+
+
+def handle_simulate_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    signal_path = _resolve_output_path(ctx, step.args, key="signal_path")
+    snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
+    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    if signal_path is None or snapshot_path is None or policy_path is None:
+        return _refuse(step, "OrderInputsMissing", ["signal or inputs missing"])
+    if not signal_path.exists() or not snapshot_path.exists() or not policy_path.exists():
+        return _refuse(step, "OrderInputsMissing", ["signal or inputs missing"])
+    signal = json.loads(signal_path.read_text(encoding="utf-8"))
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    prices = snapshot.get("prices", [])
+    if not isinstance(prices, list) or not prices:
+        return _refuse(step, "OrderInputsMissing", ["prices missing"])
+    last_price = float(prices[-1])
+    action = str(signal.get("action", "HOLD"))
+    spread_bps = float(policy.get("spread_bps", 0.0))
+    slippage_bps = float(policy.get("slippage_bps", 0.0))
+    order_size = float(policy.get("order_size", 1.0))
+
+    executed = action in {"BUY", "SELL"}
+    direction = action
+    fill_price = last_price
+    if executed:
+        adjustment = (spread_bps + slippage_bps) / 10000.0
+        if action == "BUY":
+            fill_price = last_price * (1.0 + adjustment)
+        else:
+            fill_price = last_price * (1.0 - adjustment)
+    fill = {
+        "action": action,
+        "executed": executed,
+        "direction": direction,
+        "order_size": _round_price(order_size),
+        "last_price": _round_price(last_price),
+        "fill_price": _round_price(fill_price),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="trade_fill.json",
+    )
+    payload = _canonical_json(fill)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {out_path.name if out_path else "trade_fill": digest})
+
+
+def handle_update_risk_envelope(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    fill_path = _resolve_output_path(ctx, step.args, key="trade_fill_path")
+    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    if fill_path is None or policy_path is None:
+        return _refuse(step, "RiskInputsMissing", ["trade fill or policy missing"])
+    if not fill_path.exists() or not policy_path.exists():
+        return _refuse(step, "RiskInputsMissing", ["trade fill or policy missing"])
+    fill = json.loads(fill_path.read_text(encoding="utf-8"))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    initial_equity = float(policy.get("initial_equity", 10000.0))
+    max_drawdown = float(policy.get("max_drawdown", 0.0))
+    order_size = float(fill.get("order_size", 1.0))
+    last_price = float(fill.get("last_price", 0.0))
+    fill_price = float(fill.get("fill_price", last_price))
+    action = str(fill.get("action", "HOLD"))
+    pnl = 0.0
+    if fill.get("executed"):
+        if action == "BUY":
+            pnl = (last_price - fill_price) * order_size
+        elif action == "SELL":
+            pnl = (fill_price - last_price) * order_size
+    equity = initial_equity + pnl
+    drawdown = (initial_equity - equity) / initial_equity if initial_equity else 0.0
+    envelope = {
+        "initial_equity": _round_price(initial_equity),
+        "equity": _round_price(equity),
+        "drawdown": _round_price(drawdown),
+        "max_drawdown": _round_price(max_drawdown),
+        "pnl": _round_price(pnl),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="risk_envelope.json",
+    )
+    payload = _canonical_json(envelope)
+    digests = {fill_path.name: _digest_bytes(fill_path.read_bytes())}
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["risk_envelope"] = _digest_bytes(payload.encode("utf-8"))
+    if drawdown > max_drawdown:
+        return _refuse(step, "RiskEnvelopeViolation", ["drawdown exceeds max_drawdown"], digests)
+    return _ok(step, digests)
+
+
+def handle_emit_trade_report(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
+    signal_path = _resolve_output_path(ctx, step.args, key="signal_path")
+    fill_path = _resolve_output_path(ctx, step.args, key="trade_fill_path")
+    risk_path = _resolve_output_path(ctx, step.args, key="risk_envelope_path")
+    if snapshot_path is None or signal_path is None or fill_path is None or risk_path is None:
+        return _refuse(step, "ReportInputsMissing", ["trade report inputs missing"])
+    for path in [snapshot_path, signal_path, fill_path, risk_path]:
+        if not path.exists():
+            return _refuse(step, "ReportInputsMissing", [f"missing: {path}"])
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    signal = json.loads(signal_path.read_text(encoding="utf-8"))
+    fill = json.loads(fill_path.read_text(encoding="utf-8"))
+    risk = json.loads(risk_path.read_text(encoding="utf-8"))
+    report = {
+        "symbol": snapshot.get("symbol"),
+        "action": signal.get("action"),
+        "executed": fill.get("executed"),
+        "fill_price": fill.get("fill_price"),
+        "equity": risk.get("equity"),
+        "drawdown": risk.get("drawdown"),
+        "max_drawdown": risk.get("max_drawdown"),
+        "pnl": risk.get("pnl"),
+    }
+    report_json_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="report_json_path",
+        default_name="trade_report.json",
+    )
+    report_md_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="report_md_path",
+        default_name="trade_report.md",
+    )
+    payload = _canonical_json(report)
+    digests = {}
+    if report_json_path:
+        report_json_path.write_text(payload, encoding="utf-8")
+        digests[report_json_path.name] = _digest_bytes(report_json_path.read_bytes())
+    if report_md_path:
+        lines = [
+            "# Trade Report",
+            f"symbol: {report.get('symbol')}",
+            f"action: {report.get('action')}",
+            f"executed: {report.get('executed')}",
+            f"fill_price: {report.get('fill_price')}",
+            f"equity: {report.get('equity')}",
+            f"drawdown: {report.get('drawdown')}",
+            f"max_drawdown: {report.get('max_drawdown')}",
+            f"pnl: {report.get('pnl')}",
+        ]
+        report_md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        digests[report_md_path.name] = _digest_bytes(report_md_path.read_bytes())
+    return _ok(step, digests)
+
+
 def handle_evaluate_agent_proposal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     proposal_path = _resolve_output_path(ctx, step.args, key="proposal_path")
     policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
@@ -470,6 +714,10 @@ def _digest_bytes(data: bytes) -> str:
 
     digest = hashlib.sha256(data).hexdigest()
     return f"sha256:{digest}"
+
+
+def _round_price(value: float) -> float:
+    return float(f"{value:.8f}")
 
 
 def _ok(step: EffectStep, digests: Dict[str, str]) -> EffectResult:

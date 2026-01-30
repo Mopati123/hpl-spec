@@ -1,0 +1,10 @@
+{
+  "policy_id": "policy_forbidden_v1",
+  "signal_threshold": 0.01,
+  "order_size": 10,
+  "spread_bps": 5,
+  "slippage_bps": 2,
+  "initial_equity": 10000,
+  "max_drawdown": 0.000001,
+  "max_position": 100
+}
