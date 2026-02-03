@@ -1,13 +1,12 @@
-name: HPL CI Gates
+name: HPL CI Nightly
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 jobs:
-  ci-gates:
+  ci-nightly:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,8 +53,8 @@ jobs:
         run: python -m unittest tests/test_traceability.py
       - name: Gate L2-C - Diagnostics
         run: python -m unittest tests/test_diagnostics.py
-      - name: Tests - Fast Lane (pytest, not slow)
-        run: python -m pytest -q -m "not slow"
+      - name: Tests - Full Suite
+        run: python -m pytest -q
       - name: Epoch Anchor - Generate
         run: |
           mkdir -p artifacts
@@ -151,4 +150,3 @@ jobs:
         with:
           name: hpl-bundle-${{ github.sha }}-${{ steps.bundle_path.outputs.bundle_id }}
           path: ${{ steps.bundle_path.outputs.bundle_dir }}
-

@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from tools import bundle_evidence
 
 
@@ -13,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = [sys.executable, "-m", "hpl.cli"]
 TEST_KEY = ROOT / "tests" / "fixtures" / "keys" / "ci_ed25519_test.sk"
 TEST_PUB = ROOT / "tests" / "fixtures" / "keys" / "ci_ed25519_test.pub"
+pytestmark = pytest.mark.slow
 
 
 def _env():

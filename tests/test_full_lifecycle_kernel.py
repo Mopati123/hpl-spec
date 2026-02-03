@@ -6,8 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = [sys.executable, "-m", "hpl.cli"]
+pytestmark = pytest.mark.slow
 
 
 def _env():
