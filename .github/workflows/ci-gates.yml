@@ -14,6 +14,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install Dependencies (Deterministic)
+        run: python -m pip install --disable-pip-version-check .
+      - name: Secrets Preflight (Signing Key)
+        env:
+          HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
+        run: |
+          python - <<'PY'
+          import binascii
+          import os
+          import re
+          from nacl.signing import SigningKey
+
+          seed = (os.environ.get("HPL_CI_ED25519_PRIVATE_KEY") or "").strip()
+          if not seed:
+              raise SystemExit("missing HPL_CI_ED25519_PRIVATE_KEY")
+          if not re.fullmatch(r"[0-9a-fA-F]{64}", seed):
+              raise SystemExit("invalid HPL_CI_ED25519_PRIVATE_KEY format (expected 64 hex chars)")
+          try:
+              SigningKey(binascii.unhexlify(seed))
+          except Exception as exc:
+              raise SystemExit(f"invalid HPL_CI_ED25519_PRIVATE_KEY seed: {exc}") from exc
+          print("signing secret present and well-formed")
+          PY
       - name: Gate A - Spec Integrity
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -110,12 +133,20 @@ jobs:
           bundle_path = Path(summary.get("bundle_path", ""))
           if not bundle_path.exists():
               raise SystemExit("missing bundle path for upload")
+          manifest_path = bundle_path / "bundle_manifest.json"
+          if not manifest_path.exists():
+              raise SystemExit("missing bundle_manifest.json for naming")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          bundle_id = manifest.get("bundle_id")
+          if not bundle_id:
+              raise SystemExit("missing bundle_id for naming")
+
           output = Path(__import__("os").environ["GITHUB_OUTPUT"])
-          output.write_text(f"bundle_dir={bundle_path}\n", encoding="utf-8")
+          output.write_text(f"bundle_dir={bundle_path}\n" f"bundle_id={bundle_id}\n", encoding="utf-8")
           PY
       - name: Bundle - Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hpl-bundle-${{ github.sha }}
+          name: hpl-bundle-${{ github.sha }}-${{ steps.bundle_path.outputs.bundle_id }}
           path: ${{ steps.bundle_path.outputs.bundle_dir }}
 
