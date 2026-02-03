@@ -48,6 +48,7 @@ class SchedulerContext:
     agent_decision_path: Optional[Path] = None
     trading_fixture_path: Optional[Path] = None
     trading_policy_path: Optional[Path] = None
+    trading_shadow_model_path: Optional[Path] = None
     trading_report_json_path: Optional[Path] = None
     trading_report_md_path: Optional[Path] = None
 
@@ -177,6 +178,8 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         return _build_agent_governance_steps(program_ir, ctx)
     if ctx.track == "trading_paper_mode":
         return _build_trading_paper_steps(program_ir, ctx)
+    if ctx.track == "trading_shadow_mode":
+        return _build_trading_shadow_steps(program_ir, ctx)
 
     if ctx.ecmo_input_path:
         selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
@@ -479,6 +482,187 @@ def _build_trading_paper_steps(program_ir: Dict[str, object], ctx: SchedulerCont
                 "market_snapshot_path": "market_snapshot.json",
                 "signal_path": "signal.json",
                 "trade_fill_path": "trade_fill.json",
+                "risk_envelope_path": "risk_envelope.json",
+                "report_json_path": report_json,
+                "report_md_path": report_md,
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+
+    return steps
+
+
+def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    fixture_path = str(ctx.trading_fixture_path) if ctx.trading_fixture_path else None
+    policy_path = str(ctx.trading_policy_path) if ctx.trading_policy_path else None
+    model_path = str(ctx.trading_shadow_model_path) if ctx.trading_shadow_model_path else None
+    report_json = str(ctx.trading_report_json_path) if ctx.trading_report_json_path else "trade_report.json"
+    report_md = str(ctx.trading_report_md_path) if ctx.trading_report_md_path else "trade_report.md"
+
+    add_step(
+        {
+            "step_id": f"load_shadow_model_{index}",
+            "effect_type": "SIM_MARKET_MODEL_LOAD",
+            "args": {
+                "model_path": model_path,
+                "out_path": "shadow_model.json",
+                "seed_out_path": "shadow_seed.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ingest_market_{index}",
+            "effect_type": "INGEST_MARKET_FIXTURE",
+            "args": {
+                "fixture_path": fixture_path,
+                "out_path": "market_snapshot.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"regime_shift_{index}",
+            "effect_type": "SIM_REGIME_SHIFT_STEP",
+            "args": {
+                "market_snapshot_path": "market_snapshot.json",
+                "model_path": model_path,
+                "out_path": "regime_snapshot.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"apply_latency_{index}",
+            "effect_type": "SIM_LATENCY_APPLY",
+            "args": {
+                "market_snapshot_path": "regime_snapshot.json",
+                "model_path": model_path,
+                "policy_path": policy_path,
+                "out_path": "latency_snapshot.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"compute_signal_{index}",
+            "effect_type": "COMPUTE_SIGNAL",
+            "args": {
+                "market_snapshot_path": "latency_snapshot.json",
+                "policy_path": policy_path,
+                "out_path": "signal.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"simulate_order_{index}",
+            "effect_type": "SIMULATE_ORDER",
+            "args": {
+                "market_snapshot_path": "latency_snapshot.json",
+                "signal_path": "signal.json",
+                "policy_path": policy_path,
+                "model_path": model_path,
+                "out_path": "trade_fill.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"apply_partial_fill_{index}",
+            "effect_type": "SIM_PARTIAL_FILL_MODEL",
+            "args": {
+                "trade_fill_path": "trade_fill.json",
+                "policy_path": policy_path,
+                "model_path": model_path,
+                "out_path": "shadow_fill.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"update_risk_{index}",
+            "effect_type": "UPDATE_RISK_ENVELOPE",
+            "args": {
+                "trade_fill_path": "shadow_fill.json",
+                "policy_path": policy_path,
+                "out_path": "risk_envelope.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"order_lifecycle_{index}",
+            "effect_type": "SIM_ORDER_LIFECYCLE",
+            "args": {
+                "shadow_fill_path": "shadow_fill.json",
+                "model_path": model_path,
+                "out_path": "shadow_execution_log.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"emit_ledger_{index}",
+            "effect_type": "SIM_EMIT_TRADE_LEDGER",
+            "args": {
+                "shadow_fill_path": "shadow_fill.json",
+                "risk_envelope_path": "risk_envelope.json",
+                "signal_path": "signal.json",
+                "out_path": "shadow_trade_ledger.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"emit_trade_report_{index}",
+            "effect_type": "EMIT_TRADE_REPORT",
+            "args": {
+                "market_snapshot_path": "latency_snapshot.json",
+                "signal_path": "signal.json",
+                "trade_fill_path": "shadow_fill.json",
                 "risk_envelope_path": "risk_envelope.json",
                 "report_json_path": report_json,
                 "report_md_path": report_md,
