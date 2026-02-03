@@ -92,4 +92,5 @@ conformance, certification, and intake artifacts.
 - HPL External Packet (PDF-friendly): docs/publish/hpl_external_packet_v1.md
 - Production Readiness Checklist: docs/publish/production_readiness_checklist.md
 - Trading Paper-Mode Runbook: docs/publish/trading_paper_mode_runbook.md
+- Trading Shadow-Mode Runbook: docs/publish/trading_shadow_mode_runbook.md
 
