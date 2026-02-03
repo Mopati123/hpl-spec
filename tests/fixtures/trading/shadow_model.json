@@ -1,0 +1,10 @@
+{
+  "model_id": "shadow_v1",
+  "seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "latency_steps": 2,
+  "spread_bps": 5.0,
+  "slippage_bps": 8.0,
+  "partial_fill_ratio": 0.6,
+  "regime_shift_bps": 12.0,
+  "seed_jitter_bps": 1.5
+}

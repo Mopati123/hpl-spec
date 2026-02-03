@@ -1,0 +1,12 @@
+{
+  "signal_threshold": 0.001,
+  "order_size": 1.0,
+  "initial_equity": 10000.0,
+  "max_drawdown": 0.01,
+  "spread_bps": 2.0,
+  "slippage_bps": 3.0,
+  "max_slippage_bps": 5.0,
+  "max_staleness_steps": 0,
+  "min_fill_ratio": 0.9,
+  "max_uncertainty": 1.0
+}

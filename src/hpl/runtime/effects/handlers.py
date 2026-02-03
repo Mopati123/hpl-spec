@@ -193,7 +193,7 @@ def handle_validate_quantum_semantics(step: EffectStep, ctx: RuntimeContext) -> 
 
 
 def handle_ingest_market_fixture(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
-    fixture_path = _resolve_output_path(ctx, step.args, key="fixture_path")
+    fixture_path = _resolve_input_path(ctx, step.args.get("fixture_path"))
     if fixture_path is None or not fixture_path.exists():
         return _refuse(step, "MarketFixtureMissing", ["market fixture missing"])
     try:
@@ -230,7 +230,7 @@ def handle_ingest_market_fixture(step: EffectStep, ctx: RuntimeContext) -> Effec
 
 def handle_compute_signal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
-    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
     if snapshot_path is None or policy_path is None:
         return _refuse(step, "SignalInputsMissing", ["market snapshot or policy missing"])
     if not snapshot_path.exists() or not policy_path.exists():
@@ -281,7 +281,8 @@ def handle_compute_signal(step: EffectStep, ctx: RuntimeContext) -> EffectResult
 def handle_simulate_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     signal_path = _resolve_output_path(ctx, step.args, key="signal_path")
     snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
-    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
     if signal_path is None or snapshot_path is None or policy_path is None:
         return _refuse(step, "OrderInputsMissing", ["signal or inputs missing"])
     if not signal_path.exists() or not snapshot_path.exists() or not policy_path.exists():
@@ -296,6 +297,13 @@ def handle_simulate_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult
     action = str(signal.get("action", "HOLD"))
     spread_bps = float(policy.get("spread_bps", 0.0))
     slippage_bps = float(policy.get("slippage_bps", 0.0))
+    if model_path is not None and model_path.exists():
+        model = json.loads(model_path.read_text(encoding="utf-8"))
+        spread_bps += float(model.get("spread_bps", 0.0))
+        slippage_bps += float(model.get("slippage_bps", 0.0))
+        max_slippage = policy.get("max_slippage_bps")
+        if max_slippage is not None and slippage_bps > float(max_slippage):
+            return _refuse(step, "SlippageExceedsMax", ["slippage exceeds max_slippage_bps"])
     order_size = float(policy.get("order_size", 1.0))
 
     executed = action in {"BUY", "SELL"}
@@ -332,7 +340,7 @@ def handle_simulate_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult
 
 def handle_update_risk_envelope(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     fill_path = _resolve_output_path(ctx, step.args, key="trade_fill_path")
-    policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
     if fill_path is None or policy_path is None:
         return _refuse(step, "RiskInputsMissing", ["trade fill or policy missing"])
     if not fill_path.exists() or not policy_path.exists():
@@ -397,6 +405,7 @@ def handle_emit_trade_report(step: EffectStep, ctx: RuntimeContext) -> EffectRes
         "action": signal.get("action"),
         "executed": fill.get("executed"),
         "fill_price": fill.get("fill_price"),
+        "fill_fraction": fill.get("fill_fraction"),
         "equity": risk.get("equity"),
         "drawdown": risk.get("drawdown"),
         "max_drawdown": risk.get("max_drawdown"),
@@ -434,6 +443,257 @@ def handle_emit_trade_report(step: EffectStep, ctx: RuntimeContext) -> EffectRes
         report_md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         digests[report_md_path.name] = _digest_bytes(report_md_path.read_bytes())
     return _ok(step, digests)
+
+
+def handle_sim_market_model_load(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
+    if model_path is None or not model_path.exists():
+        return _refuse(step, "ShadowModelMissing", ["shadow model missing"])
+    try:
+        model = json.loads(model_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "ShadowModelInvalid", ["shadow model invalid json"])
+    seed = str(model.get("seed", "")).strip()
+    if not seed or len(seed) != 64:
+        return _refuse(step, "ShadowModelInvalid", ["seed missing or invalid"])
+    model_core = {
+        "model_id": str(model.get("model_id", "shadow_v1")),
+        "seed": seed,
+        "latency_steps": int(model.get("latency_steps", 0)),
+        "spread_bps": float(model.get("spread_bps", 0.0)),
+        "slippage_bps": float(model.get("slippage_bps", 0.0)),
+        "partial_fill_ratio": float(model.get("partial_fill_ratio", 1.0)),
+        "regime_shift_bps": float(model.get("regime_shift_bps", 0.0)),
+        "seed_jitter_bps": float(model.get("seed_jitter_bps", 0.0)),
+    }
+    jitter = _seeded_float(seed, "slippage_jitter") * model_core["seed_jitter_bps"]
+    model_core["slippage_bps"] = _round_price(model_core["slippage_bps"] + jitter)
+    seed_id = _digest_bytes(_canonical_json(model_core).encode("utf-8"))
+    model_out = dict(model_core)
+    model_out["seed_id"] = seed_id
+
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="shadow_model.json",
+    )
+    seed_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="seed_out_path",
+        default_name="shadow_seed.json",
+    )
+    digests = {model_path.name: _digest_bytes(model_path.read_bytes())}
+    if out_path:
+        out_path.write_text(_canonical_json(model_out), encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    if seed_path:
+        seed_payload = _canonical_json({"seed": seed, "seed_id": seed_id})
+        seed_path.write_text(seed_payload, encoding="utf-8")
+        digests[seed_path.name] = _digest_bytes(seed_path.read_bytes())
+    return _ok(step, digests)
+
+
+def handle_sim_regime_shift_step(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
+    if snapshot_path is None or model_path is None:
+        return _refuse(step, "ShadowInputsMissing", ["snapshot or model missing"])
+    if not snapshot_path.exists() or not model_path.exists():
+        return _refuse(step, "ShadowInputsMissing", ["snapshot or model missing"])
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    prices = snapshot.get("prices", [])
+    if not isinstance(prices, list) or not prices:
+        return _refuse(step, "ShadowInputsMissing", ["prices missing"])
+    shift_bps = float(model.get("regime_shift_bps", 0.0))
+    factor = 1.0 + shift_bps / 10000.0
+    adjusted = [_round_price(float(price) * factor) for price in prices]
+    regime_snapshot = {
+        "symbol": snapshot.get("symbol"),
+        "prices": adjusted,
+        "count": len(adjusted),
+        "first_price": _round_price(adjusted[0]),
+        "last_price": _round_price(adjusted[-1]),
+        "regime_shift_bps": _round_price(shift_bps),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="regime_snapshot.json",
+    )
+    payload = _canonical_json(regime_snapshot)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {snapshot_path.name: _digest_bytes(snapshot_path.read_bytes()), "regime_snapshot": digest})
+
+
+def handle_sim_latency_apply(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    snapshot_path = _resolve_output_path(ctx, step.args, key="market_snapshot_path")
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    if snapshot_path is None or model_path is None or policy_path is None:
+        return _refuse(step, "LatencyInputsMissing", ["latency inputs missing"])
+    if not snapshot_path.exists() or not model_path.exists() or not policy_path.exists():
+        return _refuse(step, "LatencyInputsMissing", ["latency inputs missing"])
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    prices = snapshot.get("prices", [])
+    if not isinstance(prices, list) or not prices:
+        return _refuse(step, "LatencyInputsMissing", ["prices missing"])
+    latency_steps = int(model.get("latency_steps", 0))
+    max_staleness = int(policy.get("max_staleness_steps", latency_steps))
+    staleness_steps = min(latency_steps, max(0, len(prices) - 1))
+    if staleness_steps > max_staleness:
+        return _refuse(step, "StalenessViolation", ["staleness exceeds max_staleness_steps"])
+    spread_bps = float(model.get("spread_bps", 0.0))
+    slippage_bps = float(model.get("slippage_bps", 0.0))
+    partial_fill = float(model.get("partial_fill_ratio", 1.0))
+    uncertainty_score = latency_steps + (spread_bps + slippage_bps) / 10.0 + (1.0 - partial_fill) * 10.0
+    max_uncertainty = policy.get("max_uncertainty")
+    if max_uncertainty is not None and uncertainty_score > float(max_uncertainty):
+        return _refuse(step, "UncertaintyEnvelopeExceeded", ["uncertainty exceeds max_uncertainty"])
+    stale_index = max(0, len(prices) - 1 - latency_steps)
+    latency_prices = [float(value) for value in prices[: stale_index + 1]]
+    latency_snapshot = {
+        "symbol": snapshot.get("symbol"),
+        "prices": latency_prices,
+        "count": len(latency_prices),
+        "first_price": _round_price(latency_prices[0]),
+        "last_price": _round_price(latency_prices[-1]),
+        "latency_steps": latency_steps,
+        "staleness_steps": staleness_steps,
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="latency_snapshot.json",
+    )
+    payload = _canonical_json(latency_snapshot)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {snapshot_path.name: _digest_bytes(snapshot_path.read_bytes()), "latency_snapshot": digest})
+
+
+def handle_sim_partial_fill_model(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    fill_path = _resolve_output_path(ctx, step.args, key="trade_fill_path")
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    if fill_path is None or model_path is None or policy_path is None:
+        return _refuse(step, "PartialFillInputsMissing", ["partial fill inputs missing"])
+    if not fill_path.exists() or not model_path.exists() or not policy_path.exists():
+        return _refuse(step, "PartialFillInputsMissing", ["partial fill inputs missing"])
+    fill = json.loads(fill_path.read_text(encoding="utf-8"))
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    fill_ratio = float(model.get("partial_fill_ratio", 1.0))
+    min_fill_ratio = float(policy.get("min_fill_ratio", 0.0))
+    if fill_ratio < min_fill_ratio:
+        return _refuse(step, "PartialFillTooLow", ["partial fill ratio below minimum"], {fill_path.name: _digest_bytes(fill_path.read_bytes())})
+    order_size = float(fill.get("order_size", 0.0))
+    shadow_fill = dict(fill)
+    shadow_fill["fill_fraction"] = _round_price(fill_ratio)
+    shadow_fill["filled_size"] = _round_price(order_size * fill_ratio)
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="shadow_fill.json",
+    )
+    payload = _canonical_json(shadow_fill)
+    digests = {fill_path.name: _digest_bytes(fill_path.read_bytes())}
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["shadow_fill"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def handle_sim_order_lifecycle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    fill_path = _resolve_output_path(ctx, step.args, key="shadow_fill_path")
+    model_path = _resolve_input_path(ctx, step.args.get("model_path"))
+    if fill_path is None or model_path is None:
+        return _refuse(step, "LifecycleInputsMissing", ["shadow fill or model missing"])
+    if not fill_path.exists() or not model_path.exists():
+        return _refuse(step, "LifecycleInputsMissing", ["shadow fill or model missing"])
+    fill = json.loads(fill_path.read_text(encoding="utf-8"))
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    latency_steps = int(model.get("latency_steps", 0))
+    executed = bool(fill.get("executed"))
+    fill_fraction = float(fill.get("fill_fraction", 1.0))
+    events = [
+        {"event": "submit", "t": 0},
+        {"event": "ack", "t": latency_steps},
+    ]
+    if executed:
+        events.append({"event": "partial_fill", "t": latency_steps + 1, "fill_fraction": _round_price(fill_fraction)})
+        if fill_fraction < 1.0:
+            events.append({"event": "cancel", "t": latency_steps + 2})
+        else:
+            events.append({"event": "fill", "t": latency_steps + 2})
+    else:
+        events.append({"event": "no_trade", "t": latency_steps + 1})
+    log = {"events": events, "latency_steps": latency_steps}
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="shadow_execution_log.json",
+    )
+    payload = _canonical_json(log)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {out_path.name if out_path else "shadow_execution_log": digest})
+
+
+def handle_sim_emit_trade_ledger(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    fill_path = _resolve_output_path(ctx, step.args, key="shadow_fill_path")
+    risk_path = _resolve_output_path(ctx, step.args, key="risk_envelope_path")
+    signal_path = _resolve_output_path(ctx, step.args, key="signal_path")
+    if fill_path is None or risk_path is None or signal_path is None:
+        return _refuse(step, "LedgerInputsMissing", ["ledger inputs missing"])
+    if not fill_path.exists() or not risk_path.exists() or not signal_path.exists():
+        return _refuse(step, "LedgerInputsMissing", ["ledger inputs missing"])
+    fill = json.loads(fill_path.read_text(encoding="utf-8"))
+    risk = json.loads(risk_path.read_text(encoding="utf-8"))
+    signal = json.loads(signal_path.read_text(encoding="utf-8"))
+    ledger = {
+        "action": signal.get("action"),
+        "executed": fill.get("executed"),
+        "fill_fraction": fill.get("fill_fraction"),
+        "filled_size": fill.get("filled_size"),
+        "fill_price": fill.get("fill_price"),
+        "equity": risk.get("equity"),
+        "drawdown": risk.get("drawdown"),
+        "pnl": risk.get("pnl"),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="shadow_trade_ledger.json",
+    )
+    payload = _canonical_json(ledger)
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+    else:
+        digest = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, {out_path.name if out_path else "shadow_trade_ledger": digest})
 
 
 def handle_evaluate_agent_proposal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
@@ -698,6 +958,22 @@ def _resolve_output_path(
     return ctx.trace_sink / path
 
 
+def _resolve_input_path(ctx: RuntimeContext, value: object) -> Optional[Path]:
+    if value is None:
+        return None
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    candidate = ROOT / path
+    if candidate.exists():
+        return candidate
+    if ctx.trace_sink is not None:
+        trace_candidate = ctx.trace_sink / path
+        if trace_candidate.exists():
+            return trace_candidate
+    return path
+
+
 def _load_tool(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -718,6 +994,13 @@ def _digest_bytes(data: bytes) -> str:
 
 def _round_price(value: float) -> float:
     return float(f"{value:.8f}")
+
+
+def _seeded_float(seed: str, label: str) -> float:
+    import hashlib
+
+    digest = hashlib.sha256(f"{seed}:{label}".encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) / 0xFFFFFFFF
 
 
 def _ok(step: EffectStep, digests: Dict[str, str]) -> EffectResult:

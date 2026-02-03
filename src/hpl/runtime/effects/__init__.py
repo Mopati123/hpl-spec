@@ -11,6 +11,12 @@ from .handlers import (
     handle_simulate_order,
     handle_update_risk_envelope,
     handle_emit_trade_report,
+    handle_sim_market_model_load,
+    handle_sim_regime_shift_step,
+    handle_sim_latency_apply,
+    handle_sim_partial_fill_model,
+    handle_sim_order_lifecycle,
+    handle_sim_emit_trade_ledger,
     handle_emit_artifact,
     handle_invert_constraints,
     handle_lower_backend_ir,
@@ -43,6 +49,12 @@ register_handler(EffectType.COMPUTE_SIGNAL, handle_compute_signal)
 register_handler(EffectType.SIMULATE_ORDER, handle_simulate_order)
 register_handler(EffectType.UPDATE_RISK_ENVELOPE, handle_update_risk_envelope)
 register_handler(EffectType.EMIT_TRADE_REPORT, handle_emit_trade_report)
+register_handler(EffectType.SIM_MARKET_MODEL_LOAD, handle_sim_market_model_load)
+register_handler(EffectType.SIM_REGIME_SHIFT_STEP, handle_sim_regime_shift_step)
+register_handler(EffectType.SIM_LATENCY_APPLY, handle_sim_latency_apply)
+register_handler(EffectType.SIM_PARTIAL_FILL_MODEL, handle_sim_partial_fill_model)
+register_handler(EffectType.SIM_ORDER_LIFECYCLE, handle_sim_order_lifecycle)
+register_handler(EffectType.SIM_EMIT_TRADE_LEDGER, handle_sim_emit_trade_ledger)
 register_handler(EffectType.SIGN_BUNDLE, handle_sign_bundle)
 register_handler(EffectType.VERIFY_BUNDLE, handle_verify_bundle)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
