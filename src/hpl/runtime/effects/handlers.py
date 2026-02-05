@@ -696,6 +696,182 @@ def handle_sim_emit_trade_ledger(step: EffectStep, ctx: RuntimeContext) -> Effec
     return _ok(step, {out_path.name if out_path else "shadow_trade_ledger": digest})
 
 
+def handle_ns_evolve_linear(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    dt = float(step.args.get("dt", state["dt"]))
+    nu = float(step.args.get("nu", state["nu"]))
+    decay = _exp_safe(-nu * dt)
+    field = [
+        {"u": _round_price(cell["u"] * decay), "v": _round_price(cell["v"] * decay)}
+        for cell in state["field"]
+    ]
+    evolved = _with_state(state, field=field, t=state["t"] + dt, dt=dt, nu=nu)
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_state_linear.json")
+    return _write_state_result(step, state_path, evolved, out_path)
+
+
+def handle_ns_apply_duhamel(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    policy = _load_policy(policy_path) if policy_path else {}
+    dt = float(step.args.get("dt", state["dt"]))
+    coeff = float(policy.get("nonlinear_coeff", 0.1))
+    field = []
+    for cell in state["field"]:
+        u = cell["u"]
+        v = cell["v"]
+        u_new = u - dt * coeff * u * abs(u)
+        v_new = v - dt * coeff * v * abs(v)
+        field.append({"u": _round_price(u_new), "v": _round_price(v_new)})
+    updated = _with_state(state, field=field, t=state["t"], dt=dt, nu=state["nu"])
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_state_nonlinear.json")
+    return _write_state_result(step, state_path, updated, out_path)
+
+
+def handle_ns_project_leray(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    grid = state["grid"]
+    divergence = _divergence(field=state["field"], nx=grid["nx"], ny=grid["ny"], dx=grid["dx"], dy=grid["dy"])
+    residual = _round_price(max(abs(val) for val in divergence))
+    projection_gain = float(step.args.get("projection_gain", 0.1))
+    field = []
+    for idx, cell in enumerate(state["field"]):
+        correction = projection_gain * divergence[idx]
+        field.append(
+            {
+                "u": _round_price(cell["u"] - correction),
+                "v": _round_price(cell["v"] - correction),
+            }
+        )
+    projected = _with_state(
+        state,
+        field=field,
+        divergence_residual=residual,
+        projection_gain=projection_gain,
+    )
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_state_projected.json")
+    return _write_state_result(step, state_path, projected, out_path)
+
+
+def handle_ns_pressure_recover(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    pressure = [_round_price(-0.5 * (cell["u"] ** 2 + cell["v"] ** 2)) for cell in state["field"]]
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_pressure.json")
+    payload = _canonical_json({"pressure": pressure})
+    digests = {state_path.name: _digest_bytes(state_path.read_bytes())}
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["pressure"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def handle_ns_measure_observables(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    policy = _load_policy(policy_path) if policy_path else {}
+    grid = state["grid"]
+    energy = _energy(state["field"])
+    divergence = _divergence(field=state["field"], nx=grid["nx"], ny=grid["ny"], dx=grid["dx"], dy=grid["dy"])
+    residual = max(abs(val) for val in divergence)
+    dissipation = _dissipation(state["field"], grid["nx"], grid["ny"], grid["dx"], grid["dy"], state["nu"])
+    cfl = _cfl(state["field"], grid["dx"], grid["dy"], state["dt"])
+    observables = {
+        "energy": _round_price(energy),
+        "divergence_residual": _round_price(residual),
+        "dissipation": _round_price(dissipation),
+        "cfl": _round_price(cfl),
+        "dt": _round_price(state["dt"]),
+        "policy_id": policy.get("policy_id", "policy"),
+    }
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_observables.json")
+    payload = _canonical_json(observables)
+    digests = {state_path.name: _digest_bytes(state_path.read_bytes())}
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["observables"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def handle_ns_check_barrier(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    observables_path = _resolve_input_path(ctx, step.args.get("observables_path"))
+    policy_path = _resolve_input_path(ctx, step.args.get("policy_path"))
+    if observables_path is None or policy_path is None:
+        return _refuse(step, "BarrierInputsMissing", ["observables or policy missing"])
+    if not observables_path.exists() or not policy_path.exists():
+        return _refuse(step, "BarrierInputsMissing", ["observables or policy missing"])
+    observables = json.loads(observables_path.read_text(encoding="utf-8"))
+    policy = _load_policy(policy_path)
+    max_energy = float(policy.get("max_energy", 0.0))
+    max_div = float(policy.get("max_divergence", 0.0))
+    max_dissipation = float(policy.get("max_dissipation", 0.0))
+    max_cfl = float(policy.get("max_cfl", 0.0))
+    max_dt = float(policy.get("max_dt", observables.get("dt", 0.0)))
+    errors: List[str] = []
+    refusal_type = None
+    if max_energy and float(observables.get("energy", 0.0)) > max_energy:
+        refusal_type = refusal_type or "EnergyBarrierViolated"
+        errors.append("energy exceeds max_energy")
+    if max_div and float(observables.get("divergence_residual", 0.0)) > max_div:
+        refusal_type = refusal_type or "DivergenceResidualExceeded"
+        errors.append("divergence residual exceeds max_divergence")
+    if max_dissipation and float(observables.get("dissipation", 0.0)) > max_dissipation:
+        refusal_type = refusal_type or "DissipationExceeded"
+        errors.append("dissipation exceeds max_dissipation")
+    if max_cfl and float(observables.get("cfl", 0.0)) > max_cfl:
+        refusal_type = refusal_type or "CFLViolation"
+        errors.append("cfl exceeds max_cfl")
+    if max_dt and float(observables.get("dt", 0.0)) > max_dt:
+        refusal_type = refusal_type or "DtExceeded"
+        errors.append("dt exceeds max_dt")
+
+    certificate = {
+        "ok": not errors,
+        "errors": list(errors),
+        "observables_digest": _digest_bytes(observables_path.read_bytes()),
+        "policy_digest": _digest_bytes(policy_path.read_bytes()),
+    }
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_gate_certificate.json")
+    if out_path:
+        out_path.write_text(_canonical_json(certificate), encoding="utf-8")
+    digests = {
+        observables_path.name: _digest_bytes(observables_path.read_bytes()),
+        policy_path.name: _digest_bytes(policy_path.read_bytes()),
+    }
+    if out_path:
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    if errors:
+        return _refuse(step, refusal_type or "BarrierViolation", errors, digests)
+    return _ok(step, digests)
+
+
+def handle_ns_emit_state(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    state_path = _resolve_input_path(ctx, step.args.get("state_path"))
+    if state_path is None or not state_path.exists():
+        return _refuse(step, "StateMissing", ["state missing"])
+    state = _load_pde_state(state_path)
+    out_path = _resolve_output_path(ctx, step.args, key="out_path", default_name="ns_state_final.json")
+    return _write_state_result(step, state_path, state, out_path)
+
+
 def handle_evaluate_agent_proposal(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     proposal_path = _resolve_output_path(ctx, step.args, key="proposal_path")
     policy_path = _resolve_output_path(ctx, step.args, key="policy_path")
@@ -1001,6 +1177,119 @@ def _seeded_float(seed: str, label: str) -> float:
 
     digest = hashlib.sha256(f"{seed}:{label}".encode("utf-8")).hexdigest()
     return int(digest[:8], 16) / 0xFFFFFFFF
+
+
+def _load_pde_state(path: Path) -> Dict[str, object]:
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise ValueError("state invalid json")
+    if not isinstance(state, dict):
+        raise ValueError("state must be an object")
+    grid = state.get("grid", {})
+    nx = int(grid.get("nx", 0))
+    ny = int(grid.get("ny", 0))
+    if nx <= 0 or ny <= 0:
+        raise ValueError("grid dimensions invalid")
+    field = state.get("field", [])
+    if not isinstance(field, list) or len(field) != nx * ny:
+        raise ValueError("field must be a list of length nx*ny")
+    normalized_field = []
+    for cell in field:
+        if not isinstance(cell, dict):
+            raise ValueError("field cell must be an object")
+        normalized_field.append(
+            {
+                "u": float(cell.get("u", 0.0)),
+                "v": float(cell.get("v", 0.0)),
+            }
+        )
+    return {
+        "grid": {
+            "nx": nx,
+            "ny": ny,
+            "dx": float(grid.get("dx", 1.0)),
+            "dy": float(grid.get("dy", 1.0)),
+        },
+        "field": normalized_field,
+        "t": float(state.get("t", 0.0)),
+        "dt": float(state.get("dt", 0.1)),
+        "nu": float(state.get("nu", 0.01)),
+        "metadata": dict(state.get("metadata", {}) or {}),
+        "projection_gain": float(state.get("projection_gain", 0.1)),
+        "divergence_residual": float(state.get("divergence_residual", 0.0)),
+    }
+
+
+def _with_state(state: Dict[str, object], **updates: object) -> Dict[str, object]:
+    new_state = dict(state)
+    for key, value in updates.items():
+        new_state[key] = value
+    return new_state
+
+
+def _write_state_result(step: EffectStep, input_path: Path, state: Dict[str, object], out_path: Optional[Path]) -> EffectResult:
+    payload = _canonical_json(state)
+    digests = {input_path.name: _digest_bytes(input_path.read_bytes())}
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["state"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def _load_policy(path: Optional[Path]) -> Dict[str, object]:
+    if path is None:
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise ValueError("policy invalid json")
+
+
+def _divergence(field: List[Dict[str, float]], nx: int, ny: int, dx: float, dy: float) -> List[float]:
+    divergence = []
+    for j in range(ny):
+        for i in range(nx):
+            idx = i + j * nx
+            left = ((i - 1) % nx) + j * nx
+            right = ((i + 1) % nx) + j * nx
+            down = i + ((j - 1) % ny) * nx
+            up = i + ((j + 1) % ny) * nx
+            du_dx = (field[right]["u"] - field[left]["u"]) / (2.0 * dx)
+            dv_dy = (field[up]["v"] - field[down]["v"]) / (2.0 * dy)
+            divergence.append(du_dx + dv_dy)
+    return divergence
+
+
+def _energy(field: List[Dict[str, float]]) -> float:
+    return sum(0.5 * (cell["u"] ** 2 + cell["v"] ** 2) for cell in field)
+
+
+def _dissipation(field: List[Dict[str, float]], nx: int, ny: int, dx: float, dy: float, nu: float) -> float:
+    grad_sum = 0.0
+    for j in range(ny):
+        for i in range(nx):
+            idx = i + j * nx
+            right = ((i + 1) % nx) + j * nx
+            up = i + ((j + 1) % ny) * nx
+            du_dx = (field[right]["u"] - field[idx]["u"]) / dx
+            dv_dy = (field[up]["v"] - field[idx]["v"]) / dy
+            grad_sum += du_dx ** 2 + dv_dy ** 2
+    return nu * grad_sum
+
+
+def _cfl(field: List[Dict[str, float]], dx: float, dy: float, dt: float) -> float:
+    max_u = max(abs(cell["u"]) for cell in field) if field else 0.0
+    max_v = max(abs(cell["v"]) for cell in field) if field else 0.0
+    return (max_u * dt / dx) + (max_v * dt / dy)
+
+
+def _exp_safe(value: float) -> float:
+    import math
+
+    return math.exp(value)
 
 
 def _ok(step: EffectStep, digests: Dict[str, str]) -> EffectResult:

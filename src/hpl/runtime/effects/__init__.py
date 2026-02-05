@@ -17,6 +17,13 @@ from .handlers import (
     handle_sim_partial_fill_model,
     handle_sim_order_lifecycle,
     handle_sim_emit_trade_ledger,
+    handle_ns_evolve_linear,
+    handle_ns_apply_duhamel,
+    handle_ns_project_leray,
+    handle_ns_pressure_recover,
+    handle_ns_measure_observables,
+    handle_ns_check_barrier,
+    handle_ns_emit_state,
     handle_emit_artifact,
     handle_invert_constraints,
     handle_lower_backend_ir,
@@ -55,6 +62,13 @@ register_handler(EffectType.SIM_LATENCY_APPLY, handle_sim_latency_apply)
 register_handler(EffectType.SIM_PARTIAL_FILL_MODEL, handle_sim_partial_fill_model)
 register_handler(EffectType.SIM_ORDER_LIFECYCLE, handle_sim_order_lifecycle)
 register_handler(EffectType.SIM_EMIT_TRADE_LEDGER, handle_sim_emit_trade_ledger)
+register_handler(EffectType.NS_EVOLVE_LINEAR, handle_ns_evolve_linear)
+register_handler(EffectType.NS_APPLY_DUHAMEL, handle_ns_apply_duhamel)
+register_handler(EffectType.NS_PROJECT_LERAY, handle_ns_project_leray)
+register_handler(EffectType.NS_PRESSURE_RECOVER, handle_ns_pressure_recover)
+register_handler(EffectType.NS_MEASURE_OBSERVABLES, handle_ns_measure_observables)
+register_handler(EffectType.NS_CHECK_BARRIER, handle_ns_check_barrier)
+register_handler(EffectType.NS_EMIT_STATE, handle_ns_emit_state)
 register_handler(EffectType.SIGN_BUNDLE, handle_sign_bundle)
 register_handler(EffectType.VERIFY_BUNDLE, handle_verify_bundle)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)

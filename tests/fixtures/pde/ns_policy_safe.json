@@ -1,0 +1,9 @@
+{
+  "policy_id": "ns_policy_safe",
+  "nonlinear_coeff": 0.1,
+  "max_energy": 1.0,
+  "max_divergence": 0.5,
+  "max_dissipation": 2.0,
+  "max_cfl": 1.0,
+  "max_dt": 0.2
+}
