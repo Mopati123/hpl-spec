@@ -149,6 +149,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     trading_shadow_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
     trading_shadow_demo.add_argument("--budget-steps", type=int, default=100)
     trading_shadow_demo.add_argument("--constraint-inversion-v1", action="store_true")
+    ns_demo = demo_subparsers.add_parser("navier-stokes")
+    ns_demo.add_argument("--out-dir", type=Path, required=True)
+    ns_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
+    ns_demo.add_argument("--state", type=Path, default=Path("tests/fixtures/pde/ns_state_initial.json"))
+    ns_demo.add_argument("--policy", type=Path, default=Path("tests/fixtures/pde/ns_policy_safe.json"))
+    ns_demo.add_argument("--signing-key", type=Path)
+    ns_demo.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    ns_demo.add_argument("--require-epoch", action="store_true")
+    ns_demo.add_argument("--anchor", type=Path)
+    ns_demo.add_argument("--sig", type=Path)
+    ns_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
+    ns_demo.add_argument("--budget-steps", type=int, default=100)
+    ns_demo.add_argument("--constraint-inversion-v1", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -782,6 +795,8 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         return _cmd_demo_trading_paper(args)
     if args.demo_name == "trading-shadow":
         return _cmd_demo_trading_shadow(args)
+    if args.demo_name == "navier-stokes":
+        return _cmd_demo_navier_stokes(args)
     print(_canonical_json({"ok": False, "errors": ["unknown demo"]}))
     return 0
 
@@ -1424,6 +1439,178 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
         if not ok:
             constraint_witness = build_constraint_witness(
                 stage="trading_shadow_refusal",
+                refusal_reasons=errors,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
+            )
+            dual_proposal = invert_constraints(constraint_witness)
+            _write_json(work_dir / "constraint_witness.json", constraint_witness)
+            _write_json(work_dir / "dual_proposal.json", dual_proposal)
+
+            artifacts.append(bundle_module._artifact("constraint_witness", work_dir / "constraint_witness.json"))
+            artifacts.append(bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json"))
+
+            bundle_dir, manifest = bundle_module.build_bundle(
+                out_dir=out_dir,
+                artifacts=artifacts,
+                epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+                epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+                public_key=args.pub,
+                constraint_inversion_v1=args.constraint_inversion_v1,
+            )
+            manifest_path = bundle_dir / "bundle_manifest.json"
+            manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+            if args.signing_key:
+                sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+                ok_sig, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                    manifest_path,
+                    sig_path,
+                    args.pub,
+                )
+                if not ok_sig:
+                    errors.extend(sig_errors)
+
+        summary = {
+            "ok": ok,
+            "bundle_path": str(bundle_dir),
+            "bundle_id": manifest.get("bundle_id"),
+            "errors": list(errors),
+            "denied_reason": None if ok else "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+    except HplError as exc:
+        summary = {"ok": False, "errors": [str(exc)], "bundle_path": None, "bundle_id": None}
+        print(_canonical_json(summary))
+        return 0
+
+
+def _cmd_demo_navier_stokes(args: argparse.Namespace) -> int:
+    out_dir = args.out_dir
+    work_dir = out_dir / "work"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    program_ir_path = work_dir / "program.ir.json"
+    plan_path = work_dir / "plan.json"
+    runtime_path = work_dir / "runtime.json"
+    state_final_path = work_dir / "ns_state_final.json"
+    observables_path = work_dir / "ns_observables.json"
+    pressure_path = work_dir / "ns_pressure.json"
+    gate_path = work_dir / "ns_gate_certificate.json"
+
+    bundle_module = _load_bundle_module()
+    errors: List[str] = []
+
+    try:
+        program = parse_file(str(args.input))
+        expanded = expand_program(program)
+        validate_program(expanded)
+        program_ir = emit_program_ir(expanded, program_id=args.input.stem)
+        _write_json(program_ir_path, program_ir)
+
+        state_path = _relative_to_root(args.state)
+        policy_path = _relative_to_root(args.policy)
+
+        ctx = SchedulerContext(
+            require_epoch_verification=args.require_epoch,
+            anchor_path=args.anchor,
+            signature_path=args.sig,
+            public_key_path=args.pub,
+            allowed_backends=_parse_backends(args.allowed_backends),
+            budget_steps=args.budget_steps,
+            emit_effect_steps=True,
+            track="navier_stokes",
+            ns_state_path=state_path,
+            ns_policy_path=policy_path,
+            ns_state_final_path=Path("ns_state_final.json"),
+            ns_observables_path=Path("ns_observables.json"),
+            ns_pressure_path=Path("ns_pressure.json"),
+            ns_gate_certificate_path=Path("ns_gate_certificate.json"),
+        )
+        plan_obj = plan_program(program_ir, ctx)
+        plan_dict = plan_obj.to_dict()
+        _write_json(plan_path, plan_dict)
+
+        plan_ok = plan_obj.status == "planned"
+        if not plan_ok:
+            errors.extend(plan_obj.reasons)
+
+        token_dict = plan_dict.get("execution_token")
+        execution_token = ExecutionToken.from_dict(token_dict) if isinstance(token_dict, dict) else None
+        runtime_ctx = RuntimeContext(
+            epoch_anchor_path=args.anchor,
+            epoch_sig_path=args.sig,
+            ci_pubkey_path=args.pub,
+            execution_token=execution_token,
+            trace_sink=work_dir,
+        )
+        allowed_steps = {
+            str(step.get("step_id"))
+            for step in plan_dict.get("steps", [])
+            if isinstance(step, dict) and step.get("step_id")
+        }
+        contract = ExecutionContract(allowed_steps=allowed_steps)
+        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        runtime_dict = runtime_result.to_dict()
+        _write_json(runtime_path, runtime_dict)
+
+        run_ok = runtime_result.status == "completed"
+        if runtime_result.reasons:
+            errors.extend(runtime_result.reasons)
+
+        artifacts = [
+            bundle_module._artifact("program_ir", program_ir_path),
+            bundle_module._artifact("plan", plan_path),
+            bundle_module._artifact("runtime_result", runtime_path),
+            bundle_module._artifact("pde_state", args.state),
+            bundle_module._artifact("pde_policy", args.policy),
+        ]
+        if state_final_path.exists():
+            artifacts.append(bundle_module._artifact("pde_state_final", state_final_path))
+        if observables_path.exists():
+            artifacts.append(bundle_module._artifact("pde_observables", observables_path))
+        if pressure_path.exists():
+            artifacts.append(bundle_module._artifact("pde_pressure", pressure_path))
+        if gate_path.exists():
+            artifacts.append(bundle_module._artifact("pde_gate_certificate", gate_path))
+        if token_dict:
+            token_path = work_dir / "execution_token.json"
+            _write_json(token_path, token_dict)
+            artifacts.append(bundle_module._artifact("execution_token", token_path))
+
+        bundle_dir, manifest = bundle_module.build_bundle(
+            out_dir=out_dir,
+            artifacts=artifacts,
+            epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+            epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+            public_key=args.pub,
+            constraint_inversion_v1=args.constraint_inversion_v1,
+        )
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+        if not args.signing_key:
+            errors.append("signing_key required for navier-stokes demo")
+        else:
+            sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+            ok, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                manifest_path,
+                sig_path,
+                args.pub,
+            )
+            if not ok:
+                errors.extend(sig_errors)
+
+        ok = plan_ok and run_ok and not errors
+        constraint_witness = None
+        dual_proposal = None
+        if not ok:
+            constraint_witness = build_constraint_witness(
+                stage="navier_stokes_refusal",
                 refusal_reasons=errors,
                 artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
                 observer_id="papas",

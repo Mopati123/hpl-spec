@@ -51,6 +51,12 @@ class SchedulerContext:
     trading_shadow_model_path: Optional[Path] = None
     trading_report_json_path: Optional[Path] = None
     trading_report_md_path: Optional[Path] = None
+    ns_state_path: Optional[Path] = None
+    ns_policy_path: Optional[Path] = None
+    ns_state_final_path: Optional[Path] = None
+    ns_observables_path: Optional[Path] = None
+    ns_pressure_path: Optional[Path] = None
+    ns_gate_certificate_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -180,6 +186,8 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         return _build_trading_paper_steps(program_ir, ctx)
     if ctx.track == "trading_shadow_mode":
         return _build_trading_shadow_steps(program_ir, ctx)
+    if ctx.track == "navier_stokes":
+        return _build_navier_stokes_steps(program_ir, ctx)
 
     if ctx.ecmo_input_path:
         selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
@@ -667,6 +675,117 @@ def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerCon
                 "report_json_path": report_json,
                 "report_md_path": report_md,
             },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+
+    return steps
+
+
+def _build_navier_stokes_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    state_path = str(ctx.ns_state_path) if ctx.ns_state_path else None
+    policy_path = str(ctx.ns_policy_path) if ctx.ns_policy_path else None
+    state_final = str(ctx.ns_state_final_path) if ctx.ns_state_final_path else "ns_state_final.json"
+    observables_path = str(ctx.ns_observables_path) if ctx.ns_observables_path else "ns_observables.json"
+    pressure_path = str(ctx.ns_pressure_path) if ctx.ns_pressure_path else "ns_pressure.json"
+    gate_path = str(ctx.ns_gate_certificate_path) if ctx.ns_gate_certificate_path else "ns_gate_certificate.json"
+
+    add_step(
+        {
+            "step_id": f"ns_evolve_linear_{index}",
+            "effect_type": "NS_EVOLVE_LINEAR",
+            "args": {"state_path": state_path, "out_path": "ns_state_linear.json"},
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_apply_duhamel_{index}",
+            "effect_type": "NS_APPLY_DUHAMEL",
+            "args": {
+                "state_path": "ns_state_linear.json",
+                "policy_path": policy_path,
+                "out_path": "ns_state_nonlinear.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_project_leray_{index}",
+            "effect_type": "NS_PROJECT_LERAY",
+            "args": {"state_path": "ns_state_nonlinear.json", "out_path": "ns_state_projected.json"},
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_pressure_recover_{index}",
+            "effect_type": "NS_PRESSURE_RECOVER",
+            "args": {"state_path": "ns_state_projected.json", "out_path": pressure_path},
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_measure_obs_{index}",
+            "effect_type": "NS_MEASURE_OBSERVABLES",
+            "args": {
+                "state_path": "ns_state_projected.json",
+                "policy_path": policy_path,
+                "out_path": observables_path,
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_check_barrier_{index}",
+            "effect_type": "NS_CHECK_BARRIER",
+            "args": {
+                "observables_path": observables_path,
+                "policy_path": policy_path,
+                "out_path": gate_path,
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"ns_emit_state_{index}",
+            "effect_type": "NS_EMIT_STATE",
+            "args": {"state_path": "ns_state_projected.json", "out_path": state_final},
             "requires": {"backend": "CLASSICAL"},
         }
     )
