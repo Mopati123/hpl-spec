@@ -1,4 +1,4 @@
-# HPL Universe Index
+ï»¿# HPL Universe Index
 
 **Sub-Hamiltonians (top-level `_H` folders):**
 - `axioms_H`: immutable laws (alphabet, BNF, operator algebra, invariants)
@@ -62,10 +62,10 @@ conformance, certification, and intake artifacts.
 
 ## Level-3 Planning (Proposed / Unfrozen)
 
-- SCR: Scheduler Model — `docs/spec/scr_level3_scheduler_model.md`
-- SCR: Execution Semantics — `docs/spec/scr_level3_execution_semantics.md`
-- SCR: Measurement & Observation — `docs/spec/scr_level3_measurement_observation.md`
-- SCR: Determinism Policy — `docs/spec/scr_level3_determinism_policy.md`
+- SCR: Scheduler Model â€” `docs/spec/scr_level3_scheduler_model.md`
+- SCR: Execution Semantics â€” `docs/spec/scr_level3_execution_semantics.md`
+- SCR: Measurement & Observation â€” `docs/spec/scr_level3_measurement_observation.md`
+- SCR: Determinism Policy â€” `docs/spec/scr_level3_determinism_policy.md`
 - v2.0 Freeze Prerequisites: `docs/spec/00m_v2_0_freeze_prerequisites.md`
 - Level-3 Conformance Checklist (v2.0): `docs/spec/00n_conformance_checklist_level3_v2_0.md`
 - Level-3 Conformance Test Mapping (v2.0): `docs/spec/00o_conformance_test_mapping_level3_v2_0.md`
@@ -93,4 +93,6 @@ conformance, certification, and intake artifacts.
 - Production Readiness Checklist: docs/publish/production_readiness_checklist.md
 - Trading Paper-Mode Runbook: docs/publish/trading_paper_mode_runbook.md
 - Trading Shadow-Mode Runbook: docs/publish/trading_shadow_mode_runbook.md
+- Navierâ€“Stokes Runbook: docs/publish/navier_stokes_runbook.md
+
 
