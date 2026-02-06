@@ -34,6 +34,11 @@ from .handlers import (
     handle_delta_s_gate,
     handle_select_measurement_track,
     handle_sign_bundle,
+    handle_io_connect,
+    handle_io_submit_order,
+    handle_io_cancel_order,
+    handle_io_query_fills,
+    handle_io_emit_io_event,
     handle_validate_coupling_topology,
     handle_validate_quantum_semantics,
     handle_validate_registries,
@@ -77,6 +82,11 @@ register_handler(EffectType.NS_CHECK_BARRIER, handle_ns_check_barrier)
 register_handler(EffectType.NS_EMIT_STATE, handle_ns_emit_state)
 register_handler(EffectType.SIGN_BUNDLE, handle_sign_bundle)
 register_handler(EffectType.VERIFY_BUNDLE, handle_verify_bundle)
+register_handler(EffectType.IO_CONNECT, handle_io_connect)
+register_handler(EffectType.IO_SUBMIT_ORDER, handle_io_submit_order)
+register_handler(EffectType.IO_CANCEL_ORDER, handle_io_cancel_order)
+register_handler(EffectType.IO_QUERY_FILLS, handle_io_query_fills)
+register_handler(EffectType.IO_EMIT_IO_EVENT, handle_io_emit_io_event)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
 register_handler(EffectType.LOWER_QASM, handle_lower_qasm)
 register_handler(EffectType.BUNDLE_EVIDENCE, handle_bundle_evidence)

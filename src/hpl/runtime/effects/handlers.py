@@ -1125,6 +1125,222 @@ def handle_verify_bundle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
         return _refuse(step, "BundleSignatureInvalid", errors, digests)
     return _ok(step, digests)
 
+
+def handle_io_connect(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="BROKER_CONNECT")
+    if policy_error:
+        return policy_error
+    request = _build_io_request(step, ctx, action="connect")
+    response = {
+        "status": "connected",
+        "endpoint": request.get("endpoint"),
+        "request_id": request["request_id"],
+        "mock": True,
+    }
+    return _emit_io_artifacts(step, ctx, request, response, event_type="connect")
+
+
+def handle_io_submit_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="ORDER_SUBMIT")
+    if policy_error:
+        return policy_error
+    order = _sanitize_payload(step.args.get("order", {}))
+    request = _build_io_request(step, ctx, action="submit_order", extra={"order": order})
+    order_id = _request_id(_canonical_json(request))
+    response = {
+        "status": "accepted",
+        "order_id": order_id,
+        "request_id": request["request_id"],
+        "mock": True,
+    }
+    return _emit_io_artifacts(step, ctx, request, response, event_type="submit_order")
+
+
+def handle_io_cancel_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="ORDER_CANCEL")
+    if policy_error:
+        return policy_error
+    order_id = str(step.args.get("order_id", "")).strip()
+    if not order_id:
+        return _refuse(step, "OrderIdMissing", ["order_id missing"])
+    request = _build_io_request(step, ctx, action="cancel_order", extra={"order_id": order_id})
+    response = {
+        "status": "cancelled",
+        "order_id": order_id,
+        "request_id": request["request_id"],
+        "mock": True,
+    }
+    return _emit_io_artifacts(step, ctx, request, response, event_type="cancel_order")
+
+
+def handle_io_query_fills(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="ORDER_QUERY")
+    if policy_error:
+        return policy_error
+    order_id = str(step.args.get("order_id", "")).strip()
+    if not order_id:
+        return _refuse(step, "OrderIdMissing", ["order_id missing"])
+    request = _build_io_request(step, ctx, action="query_fills", extra={"order_id": order_id})
+    fill = {
+        "order_id": order_id,
+        "fill_qty": _round_price(float(step.args.get("fill_qty", 0.0))),
+        "fill_price": _round_price(float(step.args.get("fill_price", 0.0))),
+    }
+    response = {
+        "status": "ok",
+        "request_id": request["request_id"],
+        "fills": [fill],
+        "mock": True,
+    }
+    return _emit_io_artifacts(step, ctx, request, response, event_type="query_fills")
+
+
+def handle_io_emit_io_event(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="IO_EVENT")
+    if policy_error:
+        return policy_error
+    request = _build_io_request(step, ctx, action="emit_event")
+    event = {
+        "event_type": str(step.args.get("event_type", "io_event")),
+        "request_id": request["request_id"],
+        "endpoint": request.get("endpoint"),
+        "mock": True,
+    }
+    return _emit_io_event(step, ctx, event)
+
+
+def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str) -> Optional[EffectResult]:
+    token = ctx.execution_token
+    if token is None or token.io_policy is None or not token.io_policy.get("io_allowed", False):
+        return _refuse(step, "IOPermissionDenied", ["io not permitted"])
+    allowed_scopes = {str(item).upper() for item in token.io_policy.get("io_scopes", []) if str(item).strip()}
+    if required_scope.upper() not in allowed_scopes:
+        return _refuse(step, "IOPermissionDenied", [f"missing scope: {required_scope}"])
+    endpoint = str(step.args.get("endpoint", "")).strip()
+    allowed_endpoints = {
+        str(item) for item in token.io_policy.get("io_endpoints_allowed", []) if str(item).strip()
+    }
+    if endpoint and allowed_endpoints and endpoint not in allowed_endpoints:
+        return _refuse(step, "EndpointNotAllowed", [f"endpoint not allowed: {endpoint}"])
+    return None
+
+
+def _build_io_request(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    action: str,
+    extra: Optional[Dict[str, object]] = None,
+) -> Dict[str, object]:
+    endpoint = str(step.args.get("endpoint", "")).strip()
+    payload = {
+        "action": action,
+        "endpoint": endpoint,
+        "token_id": ctx.execution_token.token_id if ctx.execution_token else None,
+        "params": _sanitize_payload(step.args.get("params", {})),
+    }
+    if extra:
+        payload.update(extra)
+    request_id = _request_id(_canonical_json(payload))
+    payload["request_id"] = request_id
+    return payload
+
+
+def _emit_io_artifacts(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    request: Dict[str, object],
+    response: Dict[str, object],
+    event_type: str,
+) -> EffectResult:
+    request_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="request_path",
+        default_name=f"{step.step_id}_request.json",
+    )
+    response_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="response_path",
+        default_name=f"{step.step_id}_response.json",
+    )
+    event = {
+        "event_type": event_type,
+        "request_id": request["request_id"],
+        "response_status": response.get("status"),
+        "mock": True,
+    }
+    digests: Dict[str, str] = {}
+    if request_path:
+        request_path.write_text(_canonical_json(request), encoding="utf-8")
+        digests[request_path.name] = _digest_bytes(request_path.read_bytes())
+    else:
+        digests["io_request"] = _digest_bytes(_canonical_json(request).encode("utf-8"))
+    if response_path:
+        response_path.write_text(_canonical_json(response), encoding="utf-8")
+        digests[response_path.name] = _digest_bytes(response_path.read_bytes())
+    else:
+        digests["io_response"] = _digest_bytes(_canonical_json(response).encode("utf-8"))
+    event_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="event_path",
+        default_name=f"{step.step_id}_event.json",
+    )
+    if event_path:
+        event_path.write_text(_canonical_json(event), encoding="utf-8")
+        digests[event_path.name] = _digest_bytes(event_path.read_bytes())
+    else:
+        digests["io_event"] = _digest_bytes(_canonical_json(event).encode("utf-8"))
+    return _ok(step, digests)
+
+
+def _emit_io_event(step: EffectStep, ctx: RuntimeContext, event: Dict[str, object]) -> EffectResult:
+    event_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="event_path",
+        default_name=f"{step.step_id}_event.json",
+    )
+    digests: Dict[str, str] = {}
+    if event_path:
+        event_path.write_text(_canonical_json(event), encoding="utf-8")
+        digests[event_path.name] = _digest_bytes(event_path.read_bytes())
+    else:
+        digests["io_event"] = _digest_bytes(_canonical_json(event).encode("utf-8"))
+    return _ok(step, digests)
+
+
+def _request_id(payload: str) -> str:
+    return _digest_bytes(payload.encode("utf-8"))
+
+
+def _sanitize_payload(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _sanitize_payload(item) for key, item in value.items() if not _looks_like_secret_key(key)}
+    if isinstance(value, list):
+        return [_sanitize_payload(item) for item in value]
+    if isinstance(value, str):
+        if _looks_like_secret_value(value):
+            return "REDACTED"
+    return value
+
+
+def _looks_like_secret_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(token in lowered for token in ("secret", "password", "api_key", "apikey", "token"))
+
+
+def _looks_like_secret_value(value: str) -> bool:
+    lowered = value.lower()
+    if lowered.startswith("sk_live") or lowered.startswith("sk_test"):
+        return True
+    if value.startswith("ghp_"):
+        return True
+    if "bearer " in lowered:
+        return True
+    return False
+
 def handle_lower_backend_ir(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     program_ir = _program_ir_from_args(step.args)
     if program_ir is None:
