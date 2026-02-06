@@ -1,24 +1,12 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Protocol
+from typing import Dict
+
+from .adapter_contract import IOAdapterContract
 
 
-class BrokerAdapter(Protocol):
-    def connect(self, endpoint: str, params: Dict[str, object]) -> Dict[str, object]:
-        ...
-
-    def submit_order(self, endpoint: str, order: Dict[str, object], params: Dict[str, object]) -> Dict[str, object]:
-        ...
-
-    def cancel_order(self, endpoint: str, order_id: str, params: Dict[str, object]) -> Dict[str, object]:
-        ...
-
-    def query_fills(self, endpoint: str, order_id: str, params: Dict[str, object]) -> Dict[str, object]:
-        ...
-
-
-class MockBrokerAdapter:
+class MockBrokerAdapter(IOAdapterContract):
     def connect(self, endpoint: str, params: Dict[str, object]) -> Dict[str, object]:
         return {"status": "connected", "endpoint": endpoint, "mock": True}
 
@@ -49,7 +37,7 @@ class MockBrokerAdapter:
         }
 
 
-class StubBrokerAdapter:
+class StubBrokerAdapter(IOAdapterContract):
     def __init__(self, name: str) -> None:
         self._name = name
         if os.getenv("HPL_IO_ADAPTER_READY") != "1":
@@ -92,7 +80,7 @@ class StubBrokerAdapter:
         }
 
 
-def load_adapter() -> BrokerAdapter:
+def load_adapter() -> IOAdapterContract:
     adapter_name = os.getenv("HPL_IO_ADAPTER", "mock").lower()
     if adapter_name == "mock":
         return MockBrokerAdapter()

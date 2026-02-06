@@ -1,3 +1,4 @@
-from .adapter import BrokerAdapter, MockBrokerAdapter, load_adapter
+from .adapter import MockBrokerAdapter, StubBrokerAdapter, load_adapter
+from .adapter_contract import IOAdapterContract
 
-__all__ = ["BrokerAdapter", "MockBrokerAdapter", "load_adapter"]
+__all__ = ["IOAdapterContract", "MockBrokerAdapter", "StubBrokerAdapter", "load_adapter"]
