@@ -96,6 +96,16 @@ def load_adapter() -> BrokerAdapter:
     adapter_name = os.getenv("HPL_IO_ADAPTER", "mock").lower()
     if adapter_name == "mock":
         return MockBrokerAdapter()
-    if adapter_name in {"mt5", "deriv", "tradingview"}:
-        return StubBrokerAdapter(adapter_name)
+    if adapter_name == "mt5":
+        from .adapters.mt5 import MT5Adapter
+
+        return MT5Adapter()
+    if adapter_name == "deriv":
+        from .adapters.deriv import DerivAdapter
+
+        return DerivAdapter()
+    if adapter_name == "tradingview":
+        from .adapters.tradingview import TradingViewAdapter
+
+        return TradingViewAdapter()
     raise RuntimeError(f"unsupported io adapter: {adapter_name}")
