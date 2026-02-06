@@ -127,6 +127,119 @@ def handle_select_measurement_track(step: EffectStep, ctx: RuntimeContext) -> Ef
     return _ok(step, {"measurement_selection": _digest_bytes(_canonical_json(result.selection).encode("utf-8")), "boundary_conditions": input_digest})
 
 
+def handle_measure_condition(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    prior_path = _resolve_input_path(ctx, step.args.get("prior_path"))
+    posterior_path = _resolve_input_path(ctx, step.args.get("posterior_path"))
+    if prior_path is None or posterior_path is None:
+        return _refuse(step, "MeasurementInputsMissing", ["prior or posterior missing"])
+    if not prior_path.exists() or not posterior_path.exists():
+        return _refuse(step, "MeasurementInputsMissing", ["prior or posterior missing"])
+
+    mode = str(step.args.get("mode", "deterministic"))
+    trace = {
+        "mode": mode,
+        "prior_digest": _digest_bytes(prior_path.read_bytes()),
+        "posterior_digest": _digest_bytes(posterior_path.read_bytes()),
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="measurement_trace.json",
+    )
+    payload = _canonical_json(trace)
+    digests = {
+        prior_path.name: _digest_bytes(prior_path.read_bytes()),
+        posterior_path.name: _digest_bytes(posterior_path.read_bytes()),
+    }
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["measurement_trace"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def handle_compute_delta_s(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    prior_path = _resolve_input_path(ctx, step.args.get("prior_path"))
+    posterior_path = _resolve_input_path(ctx, step.args.get("posterior_path"))
+    if prior_path is None or posterior_path is None:
+        return _refuse(step, "MeasurementInputsMissing", ["prior or posterior missing"])
+    if not prior_path.exists() or not posterior_path.exists():
+        return _refuse(step, "MeasurementInputsMissing", ["prior or posterior missing"])
+    prior_bytes = prior_path.read_bytes()
+    posterior_bytes = posterior_path.read_bytes()
+    prior_digest = _digest_bytes(prior_bytes)
+    posterior_digest = _digest_bytes(posterior_bytes)
+    prior_hash = _hash_to_unit(prior_bytes)
+    posterior_hash = _hash_to_unit(posterior_bytes)
+    delta_s = _round_delta(abs(posterior_hash - prior_hash))
+    report = {
+        "method": str(step.args.get("method", "hash_diff")),
+        "delta_s": delta_s,
+        "prior_digest": prior_digest,
+        "posterior_digest": posterior_digest,
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="delta_s_report.json",
+    )
+    payload = _canonical_json(report)
+    digests = {
+        prior_path.name: prior_digest,
+        posterior_path.name: posterior_digest,
+    }
+    if out_path:
+        out_path.write_text(payload, encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["delta_s_report"] = _digest_bytes(payload.encode("utf-8"))
+    return _ok(step, digests)
+
+
+def handle_delta_s_gate(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    report_path = _resolve_input_path(ctx, step.args.get("delta_s_report_path"))
+    if report_path is None or not report_path.exists():
+        return _refuse(step, "DeltaSReportMissing", ["delta_s_report missing"])
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    token = ctx.execution_token
+    policy = None
+    if token is not None and token.delta_s_policy:
+        policy = token.delta_s_policy
+    if policy is None:
+        policy = step.args.get("policy", {})
+    if not isinstance(policy, dict):
+        policy = {}
+    threshold = float(policy.get("threshold", 0.0))
+    comparator = str(policy.get("comparator", "gte"))
+    delta_s_value = float(report.get("delta_s", 0.0))
+    ok = delta_s_value >= threshold if comparator == "gte" else delta_s_value <= threshold
+    decision = {
+        "ok": ok,
+        "delta_s": _round_delta(delta_s_value),
+        "threshold": _round_delta(threshold),
+        "comparator": comparator,
+        "token_id": token.token_id if token else None,
+    }
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name="collapse_decision.json",
+    )
+    digests = {report_path.name: _digest_bytes(report_path.read_bytes())}
+    if out_path:
+        out_path.write_text(_canonical_json(decision), encoding="utf-8")
+        digests[out_path.name] = _digest_bytes(out_path.read_bytes())
+    else:
+        digests["collapse_decision"] = _digest_bytes(_canonical_json(decision).encode("utf-8"))
+    if not ok:
+        return _refuse(step, "DeltaSGateFailed", ["delta_s gate failed"], digests)
+    return _ok(step, digests)
+
+
 def handle_check_repo_state(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     state_path = _resolve_output_path(ctx, step.args, key="state_path")
     if state_path is None or not state_path.exists():
@@ -1170,6 +1283,19 @@ def _digest_bytes(data: bytes) -> str:
 
 def _round_price(value: float) -> float:
     return float(f"{value:.8f}")
+
+
+def _round_delta(value: float) -> float:
+    return float(f"{value:.8f}")
+
+
+def _hash_to_unit(value: bytes) -> float:
+    import hashlib
+
+    digest = hashlib.sha256(value).hexdigest()
+    as_int = int(digest, 16)
+    max_int = (1 << (len(digest) * 4)) - 1
+    return as_int / max_int if max_int else 0.0
 
 
 def _seeded_float(seed: str, label: str) -> float:

@@ -5,6 +5,7 @@ from .handlers import (
     handle_assert_contract,
     handle_bundle_evidence,
     handle_check_repo_state,
+    handle_compute_delta_s,
     handle_evaluate_agent_proposal,
     handle_ingest_market_fixture,
     handle_compute_signal,
@@ -29,6 +30,8 @@ from .handlers import (
     handle_lower_backend_ir,
     handle_lower_qasm,
     handle_noop,
+    handle_measure_condition,
+    handle_delta_s_gate,
     handle_select_measurement_track,
     handle_sign_bundle,
     handle_validate_coupling_topology,
@@ -46,6 +49,9 @@ register_handler(EffectType.ASSERT_CONTRACT, handle_assert_contract)
 register_handler(EffectType.VERIFY_EPOCH, handle_verify_epoch)
 register_handler(EffectType.VERIFY_SIGNATURE, handle_verify_signature)
 register_handler(EffectType.SELECT_MEASUREMENT_TRACK, handle_select_measurement_track)
+register_handler(EffectType.MEASURE_CONDITION, handle_measure_condition)
+register_handler(EffectType.COMPUTE_DELTA_S, handle_compute_delta_s)
+register_handler(EffectType.DELTA_S_GATE, handle_delta_s_gate)
 register_handler(EffectType.CHECK_REPO_STATE, handle_check_repo_state)
 register_handler(EffectType.VALIDATE_REGISTRIES, handle_validate_registries)
 register_handler(EffectType.VALIDATE_COUPLING_TOPOLOGY, handle_validate_coupling_topology)

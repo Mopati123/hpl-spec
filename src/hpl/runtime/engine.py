@@ -60,6 +60,7 @@ class RuntimeEngine:
         constraint_witnesses: List[Dict[str, object]] = []
         verification: Optional[Dict[str, object]] = None
         transcript: List[Dict[str, object]] = []
+        evidence_roles: set[str] = set()
         execution_token = ctx.execution_token or _token_from_plan(plan)
         if execution_token is None:
             reasons.append("execution token missing")
@@ -76,8 +77,11 @@ class RuntimeEngine:
                 requested_backend=ctx.requested_backend,
             )
         remaining_steps = None
+        remaining_delta_s = None
         if ctx.execution_token is not None:
             remaining_steps = int(ctx.execution_token.budget_steps)
+            if ctx.execution_token.delta_s_budget:
+                remaining_delta_s = int(ctx.execution_token.delta_s_budget)
 
         witness_records.append(
             _build_witness(
@@ -108,6 +112,7 @@ class RuntimeEngine:
 
         steps = _steps_from_plan(plan_dict)
         for step in steps:
+            effect_type = str(step.get("effect_type", ""))
             if remaining_steps is not None and remaining_steps <= 0:
                 reasons.append("budget_steps_exceeded")
                 witness_records.append(
@@ -119,6 +124,34 @@ class RuntimeEngine:
                     )
                 )
                 break
+            if remaining_delta_s is not None and _is_measurement_effect(effect_type):
+                if remaining_delta_s <= 0:
+                    reasons.append("delta_s_budget_exceeded")
+                    witness_records.append(
+                        _build_witness(
+                            stage="delta_s_budget_denied",
+                            artifact_digests={"step": _digest_text(_canonical_json(step))},
+                            timestamp=ctx.timestamp,
+                            attestation="delta_s_budget_denied_witness",
+                        )
+                    )
+                    break
+                remaining_delta_s -= 1
+
+            if _requires_delta_s(step, ctx.execution_token):
+                required_roles = _required_delta_s_roles(step)
+                missing = sorted(required_roles - evidence_roles)
+                if missing:
+                    reasons.append(f"delta_s_evidence_missing:{','.join(missing)}")
+                    witness_records.append(
+                        _build_witness(
+                            stage="delta_s_gate_denied",
+                            artifact_digests={"step": _digest_text(_canonical_json(step))},
+                            timestamp=ctx.timestamp,
+                            attestation="delta_s_gate_denied_witness",
+                        )
+                    )
+                    break
             ok, errors = contract.preconditions(step, ctx)
             if not ok:
                 reasons.extend(errors)
@@ -166,6 +199,8 @@ class RuntimeEngine:
                         attestation="step_ok_witness",
                     )
                 )
+            if effect_result.ok:
+                _update_evidence_roles(evidence_roles, effect_result.artifact_digests)
             transcript.append(_build_transcript_entry(effect_step, effect_result, plan_dict, len(transcript)))
             if reasons:
                 break
@@ -378,3 +413,42 @@ def _canonical_json(data: object) -> str:
 def _digest_text(value: str) -> str:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+def _is_measurement_effect(effect_type: str) -> bool:
+    effect_upper = effect_type.upper()
+    return effect_upper.startswith("MEASURE") or effect_upper in {
+        "COMPUTE_DELTA_S",
+        "DELTA_S_GATE",
+    }
+
+
+def _requires_delta_s(step: Dict[str, object], token: Optional[ExecutionToken]) -> bool:
+    if not token or not token.collapse_requires_delta_s:
+        return False
+    requires = step.get("requires")
+    if isinstance(requires, dict):
+        return bool(requires.get("irreversible", False))
+    return False
+
+
+def _required_delta_s_roles(step: Dict[str, object]) -> set[str]:
+    requires = step.get("requires")
+    if isinstance(requires, dict):
+        roles = requires.get("required_roles")
+        if isinstance(roles, list) and roles:
+            return {str(role) for role in roles}
+    return {"delta_s_report", "admissibility_certificate", "collapse_decision"}
+
+
+def _update_evidence_roles(roles: set[str], digests: Dict[str, str]) -> None:
+    for name in digests.keys():
+        lowered = str(name).lower()
+        if "delta_s_report" in lowered:
+            roles.add("delta_s_report")
+        if "admissibility_certificate" in lowered or "gate_certificate" in lowered:
+            roles.add("admissibility_certificate")
+        if "collapse_decision" in lowered:
+            roles.add("collapse_decision")
+        if "measurement_trace" in lowered:
+            roles.add("measurement_trace")

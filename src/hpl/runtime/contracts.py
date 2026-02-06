@@ -18,6 +18,7 @@ class ExecutionContract:
     def preconditions(self, step: Dict[str, object], ctx: RuntimeContext) -> Tuple[bool, List[str]]:
         errors: List[str] = []
         step_id = str(step.get("step_id") or step.get("operator_id") or "")
+        effect_type = str(step.get("effect_type") or "")
         if self.allowed_steps and step_id not in self.allowed_steps:
             errors.append(f"step not allowed: {step_id}")
         required_backend = None
@@ -25,12 +26,20 @@ class ExecutionContract:
             required_backend = step.get("requires", {}).get("backend")
         if required_backend is None:
             required_backend = step.get("required_backend") or self.required_backend
+        token = ctx.execution_token
         if required_backend:
-            token = ctx.execution_token
             if token is None:
                 errors.append("execution token missing for backend requirement")
             elif str(required_backend).upper() not in token.allowed_backends:
                 errors.append(f"backend not permitted: {str(required_backend).upper()}")
+        if token and token.measurement_modes_allowed:
+            allowed_modes = {mode.upper() for mode in token.measurement_modes_allowed}
+            if effect_type and effect_type.upper().startswith("MEASURE"):
+                if effect_type.upper() not in allowed_modes:
+                    errors.append(f"measurement mode not permitted: {effect_type}")
+            if effect_type.upper() in {"COMPUTE_DELTA_S", "DELTA_S_GATE"}:
+                if effect_type.upper() not in allowed_modes:
+                    errors.append(f"measurement mode not permitted: {effect_type}")
         return not errors, errors
 
     def postconditions(self, step: Dict[str, object], ctx: RuntimeContext) -> Tuple[bool, List[str]]:
