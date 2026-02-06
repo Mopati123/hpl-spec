@@ -33,6 +33,7 @@ class SchedulerContext:
     allowed_backends: Optional[List[str]] = None
     budget_steps: int = 100
     determinism_mode: str = "deterministic"
+    io_policy: Optional[Dict[str, object]] = None
     delta_s_policy: Optional[Dict[str, object]] = None
     delta_s_budget: int = 0
     measurement_modes_allowed: Optional[List[str]] = None
@@ -97,6 +98,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         allowed_backends=allowed_backends,
         budget_steps=ctx.budget_steps,
         determinism_mode=ctx.determinism_mode,
+        io_policy=ctx.io_policy,
         delta_s_policy=ctx.delta_s_policy,
         delta_s_budget=ctx.delta_s_budget,
         measurement_modes_allowed=ctx.measurement_modes_allowed,

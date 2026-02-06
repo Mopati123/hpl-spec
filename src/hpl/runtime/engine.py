@@ -78,10 +78,15 @@ class RuntimeEngine:
             )
         remaining_steps = None
         remaining_delta_s = None
+        remaining_io_calls = None
         if ctx.execution_token is not None:
             remaining_steps = int(ctx.execution_token.budget_steps)
             if ctx.execution_token.delta_s_budget:
                 remaining_delta_s = int(ctx.execution_token.delta_s_budget)
+            if ctx.execution_token.io_policy and "io_budget_calls" in ctx.execution_token.io_policy:
+                io_budget = ctx.execution_token.io_policy.get("io_budget_calls")
+                if io_budget is not None:
+                    remaining_io_calls = int(io_budget)
 
         witness_records.append(
             _build_witness(
@@ -137,6 +142,19 @@ class RuntimeEngine:
                     )
                     break
                 remaining_delta_s -= 1
+            if remaining_io_calls is not None and _requires_io(step):
+                if remaining_io_calls <= 0:
+                    reasons.append("IOBudgetExceeded")
+                    witness_records.append(
+                        _build_witness(
+                            stage="io_budget_denied",
+                            artifact_digests={"step": _digest_text(_canonical_json(step))},
+                            timestamp=ctx.timestamp,
+                            attestation="io_budget_denied_witness",
+                        )
+                    )
+                    break
+                remaining_io_calls -= 1
 
             if _requires_delta_s(step, ctx.execution_token):
                 required_roles = _required_delta_s_roles(step)
@@ -452,3 +470,10 @@ def _update_evidence_roles(roles: set[str], digests: Dict[str, str]) -> None:
             roles.add("collapse_decision")
         if "measurement_trace" in lowered:
             roles.add("measurement_trace")
+
+
+def _requires_io(step: Dict[str, object]) -> bool:
+    requires = step.get("requires")
+    if not isinstance(requires, dict):
+        return False
+    return bool(requires.get("io_scope") or requires.get("io_scopes") or requires.get("io_endpoint"))
