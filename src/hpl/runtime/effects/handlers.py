@@ -9,6 +9,7 @@ from ...audit.constraint_inversion import invert_constraints
 from ...backends.classical_lowering import lower_program_ir_to_backend_ir
 from ...backends.qasm_lowering import lower_backend_ir_to_qasm
 from ..context import RuntimeContext
+from ..redaction import scan_artifacts
 from .effect_step import EffectResult, EffectStep
 from .measurement_selection import build_measurement_selection
 
@@ -1179,6 +1180,30 @@ def handle_bundle_evidence(step: EffectStep, ctx: RuntimeContext) -> EffectResul
         artifacts.append(bundle_module._artifact(role, path_obj))
     if errors or not artifacts:
         return _refuse(step, "BundleArtifactsMissing", errors or ["no artifacts provided"])
+
+    redaction_report = scan_artifacts([artifact.source for artifact in artifacts])
+    report_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="redaction_report",
+        default_name="redaction_report.json",
+    )
+    report_payload = _canonical_json(redaction_report)
+    redaction_digests: Dict[str, str] = {}
+    if report_path:
+        report_path.write_text(report_payload, encoding="utf-8")
+        redaction_digests[report_path.name] = _digest_bytes(report_path.read_bytes())
+        artifacts.append(bundle_module._artifact("redaction_report", report_path))
+    else:
+        redaction_digests["redaction_report"] = _digest_bytes(report_payload.encode("utf-8"))
+
+    if not redaction_report.get("ok", False):
+        return _refuse(
+            step,
+            "SecretDetectedInArtifact",
+            redaction_report.get("errors", ["secrets detected"]),
+            redaction_digests,
+        )
     bundle_dir, manifest = bundle_module.build_bundle(
         out_dir=out_dir,
         artifacts=artifacts,
@@ -1191,7 +1216,9 @@ def handle_bundle_evidence(step: EffectStep, ctx: RuntimeContext) -> EffectResul
     manifest_path = bundle_dir / "bundle_manifest.json"
     manifest_path.write_text(_canonical_json(manifest), encoding="utf-8")
     digest = _digest_bytes(manifest_path.read_bytes())
-    return _ok(step, {manifest_path.name: digest})
+    result_digests = {manifest_path.name: digest}
+    result_digests.update(redaction_digests)
+    return _ok(step, result_digests)
 
 
 def handle_invert_constraints(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
@@ -1264,8 +1291,11 @@ def _resolve_input_path(ctx: RuntimeContext, value: object) -> Optional[Path]:
 
 
 def _load_tool(name: str, path: Path):
+    import sys
+
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
