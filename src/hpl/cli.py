@@ -61,6 +61,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_parser.add_argument("--sig", type=Path)
     run_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     run_parser.add_argument("--backend", choices=["classical", "qasm"])
+    run_parser.add_argument("--enable-io", action="store_true")
 
     lower_parser = subparsers.add_parser("lower")
     lower_parser.add_argument("--backend", choices=["classical", "qasm"], required=True)
@@ -105,6 +106,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
+    lifecycle_parser.add_argument("--enable-io", action="store_true")
 
     demo_parser = subparsers.add_parser("demo")
     demo_subparsers = demo_parser.add_subparsers(dest="demo_name", required=True)
@@ -119,6 +121,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ci_demo.add_argument("--anchor", type=Path)
     ci_demo.add_argument("--sig", type=Path)
     ci_demo.add_argument("--quantum-semantics-v1", action="store_true")
+    ci_demo.add_argument("--enable-io", action="store_true")
     agent_demo = demo_subparsers.add_parser("agent-governance")
     agent_demo.add_argument("--out-dir", type=Path, required=True)
     agent_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
@@ -129,6 +132,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     agent_demo.add_argument("--require-epoch", action="store_true")
     agent_demo.add_argument("--anchor", type=Path)
     agent_demo.add_argument("--sig", type=Path)
+    agent_demo.add_argument("--enable-io", action="store_true")
     trading_demo = demo_subparsers.add_parser("trading-paper")
     trading_demo.add_argument("--out-dir", type=Path, required=True)
     trading_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
@@ -142,6 +146,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     trading_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
     trading_demo.add_argument("--budget-steps", type=int, default=100)
     trading_demo.add_argument("--constraint-inversion-v1", action="store_true")
+    trading_demo.add_argument("--enable-io", action="store_true")
     trading_shadow_demo = demo_subparsers.add_parser("trading-shadow")
     trading_shadow_demo.add_argument("--out-dir", type=Path, required=True)
     trading_shadow_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
@@ -156,6 +161,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     trading_shadow_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
     trading_shadow_demo.add_argument("--budget-steps", type=int, default=100)
     trading_shadow_demo.add_argument("--constraint-inversion-v1", action="store_true")
+    trading_shadow_demo.add_argument("--enable-io", action="store_true")
     ns_demo = demo_subparsers.add_parser("navier-stokes")
     ns_demo.add_argument("--out-dir", type=Path, required=True)
     ns_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
@@ -169,6 +175,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ns_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
     ns_demo.add_argument("--budget-steps", type=int, default=100)
     ns_demo.add_argument("--constraint-inversion-v1", action="store_true")
+    ns_demo.add_argument("--enable-io", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -270,6 +277,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         ci_pubkey_path=args.pub,
         execution_token=execution_token,
         requested_backend=_normalize_backend(args.backend) if args.backend else None,
+        io_enabled=getattr(args, "enable_io", False),
     )
     contract = _load_contract(args.contract, plan_dict)
     if args.backend:
@@ -606,6 +614,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                 epoch_sig_path=args.sig,
                 ci_pubkey_path=args.pub,
                 execution_token=execution_token,
+                io_enabled=getattr(args, "enable_io", False),
                 requested_backend=_normalize_backend(backend),
                 trace_sink=work_dir if use_kernel else None,
             )
@@ -886,6 +895,7 @@ def _cmd_demo_ci_governance(args: argparse.Namespace) -> int:
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
             requested_backend=_normalize_backend(args.backend),
             trace_sink=work_dir,
         )
@@ -1065,6 +1075,7 @@ def _cmd_demo_agent_governance(args: argparse.Namespace) -> int:
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1225,6 +1236,7 @@ def _cmd_demo_trading_paper(args: argparse.Namespace) -> int:
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1395,6 +1407,7 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1572,6 +1585,7 @@ def _cmd_demo_navier_stokes(args: argparse.Namespace) -> int:
             epoch_sig_path=args.sig,
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
             trace_sink=work_dir,
         )
         allowed_steps = {

@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -61,6 +62,20 @@ class IOEffectPackTests(unittest.TestCase):
         result = get_handler(step.effect_type)(step, ctx)
         self.assertFalse(result.ok)
         self.assertEqual(result.refusal_type, "IOPermissionDenied")
+
+    def test_io_guard_required_for_real_adapter(self):
+        ctx = self._ctx({"io_allowed": True, "io_scopes": ["BROKER_CONNECT"]})
+        ctx = RuntimeContext(trace_sink=self.tmp, execution_token=ctx.execution_token, io_enabled=True)
+        step = EffectStep(
+            step_id="io_connect",
+            effect_type=EffectType.IO_CONNECT,
+            args={"endpoint": "broker://demo"},
+        )
+        if "HPL_IO_ENABLED" in os.environ:
+            del os.environ["HPL_IO_ENABLED"]
+        result = get_handler(step.effect_type)(step, ctx)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.refusal_type, "IOGuardNotEnabled")
 
     def test_io_endpoint_allowlist(self):
         ctx = self._ctx(

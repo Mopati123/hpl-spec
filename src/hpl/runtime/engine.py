@@ -75,6 +75,7 @@ class RuntimeEngine:
                 timestamp=ctx.timestamp,
                 execution_token=execution_token,
                 requested_backend=ctx.requested_backend,
+                io_enabled=ctx.io_enabled,
             )
         remaining_steps = None
         remaining_delta_s = None

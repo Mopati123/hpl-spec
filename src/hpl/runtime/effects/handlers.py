@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -9,6 +10,7 @@ from ...audit.constraint_inversion import invert_constraints
 from ...backends.classical_lowering import lower_program_ir_to_backend_ir
 from ...backends.qasm_lowering import lower_backend_ir_to_qasm
 from ..context import RuntimeContext
+from ..io.adapter import load_adapter
 from ..redaction import scan_artifacts
 from .effect_step import EffectResult, EffectStep
 from .measurement_selection import build_measurement_selection
@@ -1131,12 +1133,18 @@ def handle_io_connect(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     if policy_error:
         return policy_error
     request = _build_io_request(step, ctx, action="connect")
-    response = {
-        "status": "connected",
-        "endpoint": request.get("endpoint"),
-        "request_id": request["request_id"],
-        "mock": True,
-    }
+    adapter = _resolve_io_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.connect(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "connected",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "mock": True,
+        }
     return _emit_io_artifacts(step, ctx, request, response, event_type="connect")
 
 
@@ -1146,13 +1154,19 @@ def handle_io_submit_order(step: EffectStep, ctx: RuntimeContext) -> EffectResul
         return policy_error
     order = _sanitize_payload(step.args.get("order", {}))
     request = _build_io_request(step, ctx, action="submit_order", extra={"order": order})
-    order_id = _request_id(_canonical_json(request))
-    response = {
-        "status": "accepted",
-        "order_id": order_id,
-        "request_id": request["request_id"],
-        "mock": True,
-    }
+    adapter = _resolve_io_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.submit_order(request.get("endpoint", ""), order, request.get("params", {}))
+    else:
+        order_id = _request_id(_canonical_json(request))
+        response = {
+            "status": "accepted",
+            "order_id": order_id,
+            "request_id": request["request_id"],
+            "mock": True,
+        }
     return _emit_io_artifacts(step, ctx, request, response, event_type="submit_order")
 
 
@@ -1164,12 +1178,18 @@ def handle_io_cancel_order(step: EffectStep, ctx: RuntimeContext) -> EffectResul
     if not order_id:
         return _refuse(step, "OrderIdMissing", ["order_id missing"])
     request = _build_io_request(step, ctx, action="cancel_order", extra={"order_id": order_id})
-    response = {
-        "status": "cancelled",
-        "order_id": order_id,
-        "request_id": request["request_id"],
-        "mock": True,
-    }
+    adapter = _resolve_io_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.cancel_order(request.get("endpoint", ""), order_id, request.get("params", {}))
+    else:
+        response = {
+            "status": "cancelled",
+            "order_id": order_id,
+            "request_id": request["request_id"],
+            "mock": True,
+        }
     return _emit_io_artifacts(step, ctx, request, response, event_type="cancel_order")
 
 
@@ -1186,12 +1206,18 @@ def handle_io_query_fills(step: EffectStep, ctx: RuntimeContext) -> EffectResult
         "fill_qty": _round_price(float(step.args.get("fill_qty", 0.0))),
         "fill_price": _round_price(float(step.args.get("fill_price", 0.0))),
     }
-    response = {
-        "status": "ok",
-        "request_id": request["request_id"],
-        "fills": [fill],
-        "mock": True,
-    }
+    adapter = _resolve_io_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.query_fills(request.get("endpoint", ""), order_id, request.get("params", {}))
+    else:
+        response = {
+            "status": "ok",
+            "request_id": request["request_id"],
+            "fills": [fill],
+            "mock": True,
+        }
     return _emit_io_artifacts(step, ctx, request, response, event_type="query_fills")
 
 
@@ -1359,6 +1385,8 @@ def _emit_io_artifacts(
     response: Dict[str, object],
     event_type: str,
 ) -> EffectResult:
+    request = _sanitize_payload(request)
+    response = _sanitize_payload(response)
     request_path = _resolve_output_path(
         ctx,
         step.args,
@@ -1403,6 +1431,7 @@ def _emit_io_artifacts(
 
 
 def _emit_io_event(step: EffectStep, ctx: RuntimeContext, event: Dict[str, object]) -> EffectResult:
+    event = _sanitize_payload(event)
     event_path = _resolve_output_path(
         ctx,
         step.args,
@@ -1431,6 +1460,17 @@ def _sanitize_payload(value: object) -> object:
         if _looks_like_secret_value(value):
             return "REDACTED"
     return value
+
+
+def _resolve_io_adapter(step: EffectStep, ctx: RuntimeContext) -> object:
+    if not ctx.io_enabled:
+        return None
+    if os.getenv("HPL_IO_ENABLED") != "1":
+        return _refuse(step, "IOGuardNotEnabled", ["HPL_IO_ENABLED not set"])
+    try:
+        return load_adapter()
+    except Exception as exc:
+        return _refuse(step, "IOAdapterUnavailable", [str(exc)])
 
 
 def _looks_like_secret_key(key: str) -> bool:
