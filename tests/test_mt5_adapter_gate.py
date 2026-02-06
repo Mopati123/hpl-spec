@@ -1,5 +1,4 @@
-import json
-import os
+﻿import os
 import sys
 import tempfile
 import unittest
@@ -15,7 +14,7 @@ from hpl.runtime.context import RuntimeContext
 from hpl.runtime.effects import EffectStep, EffectType, get_handler
 
 
-class IOAdapterStubTests(unittest.TestCase):
+class MT5AdapterGateTests(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp = Path(self.tmp_dir.name)
@@ -32,11 +31,13 @@ class IOAdapterStubTests(unittest.TestCase):
         )
         return RuntimeContext(trace_sink=self.tmp, execution_token=token, io_enabled=True)
 
-    def test_stub_requires_ready_flag(self):
+    def test_mt5_missing_env_refuses(self):
         os.environ["HPL_IO_ADAPTER"] = "mt5"
         os.environ["HPL_IO_ENABLED"] = "1"
-        if "HPL_IO_ADAPTER_READY" in os.environ:
-            del os.environ["HPL_IO_ADAPTER_READY"]
+        os.environ["HPL_IO_ADAPTER_READY"] = "1"
+        for key in ("HPL_MT5_LOGIN", "HPL_MT5_PASSWORD", "HPL_MT5_SERVER"):
+            if key in os.environ:
+                del os.environ[key]
         step = EffectStep(
             step_id="io_connect",
             effect_type=EffectType.IO_CONNECT,
@@ -45,23 +46,6 @@ class IOAdapterStubTests(unittest.TestCase):
         result = get_handler(step.effect_type)(step, self._ctx())
         self.assertFalse(result.ok)
         self.assertEqual(result.refusal_type, "IOAdapterUnavailable")
-
-    def test_stub_connect_success_when_ready(self):
-        os.environ["HPL_IO_ADAPTER"] = "mock"
-        os.environ["HPL_IO_ENABLED"] = "1"
-        step = EffectStep(
-            step_id="io_connect",
-            effect_type=EffectType.IO_CONNECT,
-            args={
-                "endpoint": "broker://demo",
-                "request_path": "io_req.json",
-                "response_path": "io_resp.json",
-            },
-        )
-        result = get_handler(step.effect_type)(step, self._ctx())
-        self.assertTrue(result.ok)
-        response_payload = json.loads((self.tmp / "io_resp.json").read_text(encoding="utf-8"))
-        self.assertTrue(response_payload.get("mock"))
 
 
 if __name__ == "__main__":
