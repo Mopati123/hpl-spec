@@ -1209,6 +1209,113 @@ def handle_io_emit_io_event(step: EffectStep, ctx: RuntimeContext) -> EffectResu
     return _emit_io_event(step, ctx, event)
 
 
+def handle_io_reconcile(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="RECONCILE")
+    if policy_error:
+        return policy_error
+    request_path = _resolve_output_path(ctx, step.args, key="request_path")
+    response_path = _resolve_output_path(ctx, step.args, key="response_path")
+    if request_path is None or response_path is None:
+        return _refuse(step, "IOReconciliationInputsMissing", ["request/response missing"])
+    if not request_path.exists() or not response_path.exists():
+        return _refuse(step, "IOReconciliationInputsMissing", ["request/response missing"])
+
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    response = json.loads(response_path.read_text(encoding="utf-8"))
+    expected_status = step.args.get("expected_status")
+    status = response.get("status")
+    reasons: List[str] = []
+    ok = True
+    if expected_status is not None and str(status) != str(expected_status):
+        ok = False
+        reasons.append("status mismatch")
+    if response.get("ambiguous", False):
+        ok = False
+        reasons.append("ambiguous response")
+
+    action = "commit" if ok else "refuse"
+    token = ctx.execution_token
+    if not ok and token and token.io_policy and token.io_policy.get("io_requires_reconciliation", True):
+        action = "rollback"
+
+    outcome = {
+        "ok": ok,
+        "action": action,
+        "request_digest": _digest_bytes(request_path.read_bytes()),
+        "response_digest": _digest_bytes(response_path.read_bytes()),
+        "token_id": token.token_id if token else None,
+        "reasons": list(reasons),
+    }
+    outcome_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="outcome_path",
+        default_name="io_outcome.json",
+    )
+    if outcome_path:
+        outcome_path.write_text(_canonical_json(outcome), encoding="utf-8")
+    reconciliation = {
+        "ok": ok,
+        "action": action,
+        "request_id": request.get("request_id"),
+        "response_status": status,
+        "outcome_digest": _digest_bytes(_canonical_json(outcome).encode("utf-8")),
+    }
+    reconciliation_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="reconciliation_path",
+        default_name="reconciliation_report.json",
+    )
+    if reconciliation_path:
+        reconciliation_path.write_text(_canonical_json(reconciliation), encoding="utf-8")
+
+    digests = {
+        request_path.name: _digest_bytes(request_path.read_bytes()),
+        response_path.name: _digest_bytes(response_path.read_bytes()),
+    }
+    if outcome_path:
+        digests[outcome_path.name] = _digest_bytes(outcome_path.read_bytes())
+    if reconciliation_path:
+        digests[reconciliation_path.name] = _digest_bytes(reconciliation_path.read_bytes())
+
+    if not ok:
+        return _refuse(step, "IOAmbiguousResult", reasons or ["reconciliation failed"], digests)
+    return _ok(step, digests)
+
+
+def handle_io_rollback(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_io_policy(step, ctx, required_scope="ROLLBACK")
+    if policy_error:
+        return policy_error
+    outcome_path = _resolve_output_path(ctx, step.args, key="outcome_path")
+    if outcome_path is None or not outcome_path.exists():
+        return _refuse(step, "IORollbackMissingOutcome", ["outcome missing"])
+    outcome = json.loads(outcome_path.read_text(encoding="utf-8"))
+    action = outcome.get("action")
+    if action != "rollback":
+        return _refuse(step, "IORollbackNotRequired", ["rollback not required"], {outcome_path.name: _digest_bytes(outcome_path.read_bytes())})
+    record = {
+        "ok": True,
+        "outcome_digest": _digest_bytes(outcome_path.read_bytes()),
+        "token_id": ctx.execution_token.token_id if ctx.execution_token else None,
+        "note": "rollback recorded",
+    }
+    record_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="record_path",
+        default_name="rollback_record.json",
+    )
+    digests = {outcome_path.name: _digest_bytes(outcome_path.read_bytes())}
+    if record_path:
+        record_path.write_text(_canonical_json(record), encoding="utf-8")
+        digests[record_path.name] = _digest_bytes(record_path.read_bytes())
+    else:
+        digests["rollback_record"] = _digest_bytes(_canonical_json(record).encode("utf-8"))
+    return _ok(step, digests)
+
+
 def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str) -> Optional[EffectResult]:
     token = ctx.execution_token
     if token is None or token.io_policy is None or not token.io_policy.get("io_allowed", False):

@@ -39,6 +39,8 @@ from .handlers import (
     handle_io_cancel_order,
     handle_io_query_fills,
     handle_io_emit_io_event,
+    handle_io_reconcile,
+    handle_io_rollback,
     handle_validate_coupling_topology,
     handle_validate_quantum_semantics,
     handle_validate_registries,
@@ -87,6 +89,8 @@ register_handler(EffectType.IO_SUBMIT_ORDER, handle_io_submit_order)
 register_handler(EffectType.IO_CANCEL_ORDER, handle_io_cancel_order)
 register_handler(EffectType.IO_QUERY_FILLS, handle_io_query_fills)
 register_handler(EffectType.IO_EMIT_IO_EVENT, handle_io_emit_io_event)
+register_handler(EffectType.IO_RECONCILE, handle_io_reconcile)
+register_handler(EffectType.IO_ROLLBACK, handle_io_rollback)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
 register_handler(EffectType.LOWER_QASM, handle_lower_qasm)
 register_handler(EffectType.BUNDLE_EVIDENCE, handle_bundle_evidence)
