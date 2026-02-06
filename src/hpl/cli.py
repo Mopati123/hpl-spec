@@ -84,6 +84,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle_parser.add_argument("--admissibility-certificate", type=Path)
     bundle_parser.add_argument("--measurement-trace", type=Path)
     bundle_parser.add_argument("--collapse-decision", type=Path)
+    bundle_parser.add_argument("--io-request-log", type=Path)
+    bundle_parser.add_argument("--io-response-log", type=Path)
+    bundle_parser.add_argument("--io-event-log", type=Path)
+    bundle_parser.add_argument("--io-outcome", type=Path)
+    bundle_parser.add_argument("--reconciliation-report", type=Path)
+    bundle_parser.add_argument("--rollback-record", type=Path)
+    bundle_parser.add_argument("--redaction-report", type=Path)
     bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
     bundle_parser.add_argument("--quantum-semantics-v1", action="store_true")
@@ -361,6 +368,13 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
     add_artifact("admissibility_certificate", args.admissibility_certificate)
     add_artifact("measurement_trace", args.measurement_trace)
     add_artifact("collapse_decision", args.collapse_decision)
+    add_artifact("io_request_log", args.io_request_log)
+    add_artifact("io_response_log", args.io_response_log)
+    add_artifact("io_event_log", args.io_event_log)
+    add_artifact("io_outcome", args.io_outcome)
+    add_artifact("reconciliation_report", args.reconciliation_report)
+    add_artifact("rollback_record", args.rollback_record)
+    add_artifact("redaction_report", args.redaction_report)
 
     extras = sorted(args.extra or [], key=lambda p: str(p))
     for idx, path in enumerate(extras):
@@ -411,6 +425,24 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
             if not quantum.get("projection_present"):
                 quantum_errors.append("missing backend projection")
 
+    delta_errors: List[str] = []
+    delta_section = manifest.get("delta_s_v1")
+    if isinstance(delta_section, dict) and not delta_section.get("ok", True):
+        ok = False
+        delta_errors.append("delta_s roles incomplete")
+        missing_required = delta_section.get("missing_required", [])
+        if missing_required:
+            delta_errors.append(f"missing_required={','.join(missing_required)}")
+
+    io_errors: List[str] = []
+    io_section = manifest.get("io_lane_v1")
+    if isinstance(io_section, dict) and not io_section.get("ok", True):
+        ok = False
+        io_errors.append("io lane roles incomplete")
+        missing_required = io_section.get("missing_required", [])
+        if missing_required:
+            io_errors.append(f"missing_required={','.join(missing_required)}")
+
     if args.sign_bundle:
         if not args.signing_key:
             ok = False
@@ -439,7 +471,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         evidence_path,
         command="bundle",
         ok=ok,
-        errors=quantum_errors + bundle_sig_errors,
+        errors=quantum_errors + delta_errors + io_errors + bundle_sig_errors,
         inputs=evidence_inputs,
         outputs={"bundle_manifest": _digest_file(manifest_path)},
     )
@@ -448,7 +480,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         "ok": ok,
         "bundle_path": str(bundle_dir),
         "bundle_id": manifest.get("bundle_id"),
-        "errors": quantum_errors + bundle_sig_errors,
+        "errors": quantum_errors + delta_errors + io_errors + bundle_sig_errors,
     }
     print(_canonical_json(summary))
     return 0
