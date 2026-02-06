@@ -95,6 +95,7 @@ conformance, certification, and intake artifacts.
 - Trading Shadow-Mode Runbook: docs/publish/trading_shadow_mode_runbook.md
 - Navier–Stokes Runbook: docs/publish/navier_stokes_runbook.md
 - ΔS Kernel Runbook: docs/publish/delta_s_kernel_runbook.md
+- IO Lane Runbook: docs/publish/io_lane_runbook.md
 
 
 
