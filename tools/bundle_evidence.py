@@ -73,6 +73,9 @@ def main() -> int:
     delta_section = manifest.get("delta_s_v1")
     if isinstance(delta_section, dict):
         overall_ok = overall_ok and bool(delta_section.get("ok", True))
+    io_section = manifest.get("io_lane_v1")
+    if isinstance(io_section, dict):
+        overall_ok = overall_ok and bool(io_section.get("ok", True))
     overall_ok = overall_ok and bundle_verify_ok
     if args.verify_bundle and not bundle_verify_ok:
         print(_canonical_json({"ok": False, "errors": bundle_verify_errors}))
@@ -129,6 +132,11 @@ def build_bundle(
         manifest["delta_s_v1"] = _delta_s_section(artifacts)
         manifest["delta_s_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
+    io_section = _io_section(artifacts)
+    if io_section.get("io_present"):
+        manifest["io_lane_v1"] = io_section
+        manifest["io_lane_v1"]["evidence_manifest"] = "bundle_manifest.json"
+
     return bundle_dir, manifest
 
 
@@ -151,6 +159,13 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "admissibility_certificate": args.admissibility_certificate,
         "measurement_trace": args.measurement_trace,
         "collapse_decision": args.collapse_decision,
+        "io_request_log": args.io_request_log,
+        "io_response_log": args.io_response_log,
+        "io_event_log": args.io_event_log,
+        "io_outcome": args.io_outcome,
+        "reconciliation_report": args.reconciliation_report,
+        "rollback_record": args.rollback_record,
+        "redaction_report": args.redaction_report,
     }
 
     artifacts: List[Artifact] = []
@@ -275,6 +290,52 @@ def _delta_s_section(artifacts: List[Artifact]) -> Dict[str, object]:
     }
 
 
+def _io_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    present_roles = sorted({artifact.role for artifact in artifacts})
+    io_detect_roles = {
+        "io_request_log",
+        "io_response_log",
+        "io_event_log",
+        "io_outcome",
+        "reconciliation_report",
+        "rollback_record",
+    }
+    io_present = any(role in io_detect_roles for role in present_roles)
+    if not io_present:
+        return {
+            "ok": True,
+            "io_present": False,
+            "required_roles": [],
+            "present_roles": present_roles,
+            "missing_required": [],
+            "rollback_required": False,
+        }
+
+    required_roles = [
+        "io_request_log",
+        "io_response_log",
+        "reconciliation_report",
+        "io_outcome",
+        "redaction_report",
+    ]
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    rollback_required = False
+    outcome = _load_role_json(artifacts, "io_outcome")
+    if isinstance(outcome, dict) and str(outcome.get("action", "")).lower() == "rollback":
+        rollback_required = True
+        if "rollback_record" not in present_roles:
+            missing_required.append("rollback_record")
+    ok = not missing_required
+    return {
+        "ok": ok,
+        "io_present": True,
+        "required_roles": required_roles,
+        "present_roles": present_roles,
+        "missing_required": sorted(set(missing_required)),
+        "rollback_required": rollback_required,
+    }
+
+
 def _load_execution_token(artifacts: List[Artifact]) -> Optional[Dict[str, object]]:
     for artifact in artifacts:
         if artifact.role != "execution_token":
@@ -283,6 +344,20 @@ def _load_execution_token(artifacts: List[Artifact]) -> Optional[Dict[str, objec
             return json.loads(artifact.source.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+    return None
+
+
+def _load_role_json(artifacts: List[Artifact], role: str) -> Optional[Dict[str, object]]:
+    for artifact in artifacts:
+        if artifact.role != role:
+            continue
+        try:
+            data = json.loads(artifact.source.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if isinstance(data, dict):
+            return data
+        return None
     return None
 
 
@@ -393,6 +468,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--admissibility-certificate", type=Path)
     parser.add_argument("--measurement-trace", type=Path)
     parser.add_argument("--collapse-decision", type=Path)
+    parser.add_argument("--io-request-log", type=Path)
+    parser.add_argument("--io-response-log", type=Path)
+    parser.add_argument("--io-event-log", type=Path)
+    parser.add_argument("--io-outcome", type=Path)
+    parser.add_argument("--reconciliation-report", type=Path)
+    parser.add_argument("--rollback-record", type=Path)
+    parser.add_argument("--redaction-report", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
     parser.add_argument("--quantum-semantics-v1", action="store_true")
