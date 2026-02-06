@@ -76,6 +76,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle_parser.add_argument("--qasm", type=Path)
     bundle_parser.add_argument("--epoch-anchor", type=Path)
     bundle_parser.add_argument("--epoch-sig", type=Path)
+    bundle_parser.add_argument("--execution-token", type=Path)
+    bundle_parser.add_argument("--constraint-witness", type=Path)
+    bundle_parser.add_argument("--dual-proposal", type=Path)
+    bundle_parser.add_argument("--delta-s-report", type=Path)
+    bundle_parser.add_argument("--admissibility-certificate", type=Path)
+    bundle_parser.add_argument("--measurement-trace", type=Path)
+    bundle_parser.add_argument("--collapse-decision", type=Path)
     bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
     bundle_parser.add_argument("--quantum-semantics-v1", action="store_true")
@@ -339,6 +346,13 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
     add_artifact("qasm", args.qasm)
     add_artifact("epoch_anchor", args.epoch_anchor)
     add_artifact("epoch_sig", args.epoch_sig)
+    add_artifact("execution_token", args.execution_token)
+    add_artifact("constraint_witness", args.constraint_witness)
+    add_artifact("dual_proposal", args.dual_proposal)
+    add_artifact("delta_s_report", args.delta_s_report)
+    add_artifact("admissibility_certificate", args.admissibility_certificate)
+    add_artifact("measurement_trace", args.measurement_trace)
+    add_artifact("collapse_decision", args.collapse_decision)
 
     extras = sorted(args.extra or [], key=lambda p: str(p))
     for idx, path in enumerate(extras):
@@ -701,6 +715,18 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
             artifacts.append(
                 bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json")
             )
+        delta_s_report = work_dir / "delta_s_report.json"
+        admissibility_certificate = work_dir / "admissibility_certificate.json"
+        measurement_trace = work_dir / "measurement_trace.json"
+        collapse_decision = work_dir / "collapse_decision.json"
+        if delta_s_report.exists():
+            artifacts.append(bundle_module._artifact("delta_s_report", delta_s_report))
+        if admissibility_certificate.exists():
+            artifacts.append(bundle_module._artifact("admissibility_certificate", admissibility_certificate))
+        if measurement_trace.exists():
+            artifacts.append(bundle_module._artifact("measurement_trace", measurement_trace))
+        if collapse_decision.exists():
+            artifacts.append(bundle_module._artifact("collapse_decision", collapse_decision))
 
         anchor_for_bundle = args.anchor if args.anchor and args.anchor.exists() else None
         sig_for_bundle = args.sig if args.sig and args.sig.exists() else None

@@ -70,6 +70,9 @@ def main() -> int:
     constraint_section = manifest.get("constraint_inversion_v1")
     if isinstance(constraint_section, dict):
         overall_ok = overall_ok and bool(constraint_section.get("ok", True))
+    delta_section = manifest.get("delta_s_v1")
+    if isinstance(delta_section, dict):
+        overall_ok = overall_ok and bool(delta_section.get("ok", True))
     overall_ok = overall_ok and bundle_verify_ok
     if args.verify_bundle and not bundle_verify_ok:
         print(_canonical_json({"ok": False, "errors": bundle_verify_errors}))
@@ -121,6 +124,11 @@ def build_bundle(
         manifest["constraint_inversion_v1"] = _constraint_inversion_section(artifacts)
         manifest["constraint_inversion_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
+    token_data = _load_execution_token(artifacts)
+    if token_data and token_data.get("collapse_requires_delta_s"):
+        manifest["delta_s_v1"] = _delta_s_section(artifacts)
+        manifest["delta_s_v1"]["evidence_manifest"] = "bundle_manifest.json"
+
     return bundle_dir, manifest
 
 
@@ -139,6 +147,10 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "execution_token": execution_token,
         "constraint_witness": args.constraint_witness,
         "dual_proposal": args.dual_proposal,
+        "delta_s_report": args.delta_s_report,
+        "admissibility_certificate": args.admissibility_certificate,
+        "measurement_trace": args.measurement_trace,
+        "collapse_decision": args.collapse_decision,
     }
 
     artifacts: List[Artifact] = []
@@ -250,6 +262,30 @@ def _constraint_inversion_section(artifacts: List[Artifact]) -> Dict[str, object
     }
 
 
+def _delta_s_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    required_roles = ["delta_s_report", "admissibility_certificate", "collapse_decision"]
+    present_roles = sorted({artifact.role for artifact in artifacts})
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    ok = not missing_required
+    return {
+        "ok": ok,
+        "required_roles": required_roles,
+        "present_roles": present_roles,
+        "missing_required": missing_required,
+    }
+
+
+def _load_execution_token(artifacts: List[Artifact]) -> Optional[Dict[str, object]]:
+    for artifact in artifacts:
+        if artifact.role != "execution_token":
+            continue
+        try:
+            return json.loads(artifact.source.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+    return None
+
+
 def _verify_epoch_and_signature(
     anchor: Optional[Path],
     signature: Optional[Path],
@@ -353,6 +389,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--execution-token", type=Path)
     parser.add_argument("--constraint-witness", type=Path)
     parser.add_argument("--dual-proposal", type=Path)
+    parser.add_argument("--delta-s-report", type=Path)
+    parser.add_argument("--admissibility-certificate", type=Path)
+    parser.add_argument("--measurement-trace", type=Path)
+    parser.add_argument("--collapse-decision", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
     parser.add_argument("--quantum-semantics-v1", action="store_true")
