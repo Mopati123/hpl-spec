@@ -165,6 +165,7 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "io_outcome": args.io_outcome,
         "reconciliation_report": args.reconciliation_report,
         "rollback_record": args.rollback_record,
+        "remediation_plan": args.remediation_plan,
         "redaction_report": args.redaction_report,
     }
 
@@ -320,11 +321,18 @@ def _io_section(artifacts: List[Artifact]) -> Dict[str, object]:
     ]
     missing_required = sorted([role for role in required_roles if role not in present_roles])
     rollback_required = False
+    remediation_required = False
     outcome = _load_role_json(artifacts, "io_outcome")
     if isinstance(outcome, dict) and str(outcome.get("action", "")).lower() == "rollback":
         rollback_required = True
         if "rollback_record" not in present_roles:
             missing_required.append("rollback_record")
+    if isinstance(outcome, dict):
+        action = str(outcome.get("action", "")).lower()
+        if action in {"rollback", "refuse"} or outcome.get("ok") is False:
+            remediation_required = True
+            if "remediation_plan" not in present_roles:
+                missing_required.append("remediation_plan")
     ok = not missing_required
     return {
         "ok": ok,
@@ -333,6 +341,7 @@ def _io_section(artifacts: List[Artifact]) -> Dict[str, object]:
         "present_roles": present_roles,
         "missing_required": sorted(set(missing_required)),
         "rollback_required": rollback_required,
+        "remediation_required": remediation_required,
     }
 
 
@@ -474,6 +483,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--io-outcome", type=Path)
     parser.add_argument("--reconciliation-report", type=Path)
     parser.add_argument("--rollback-record", type=Path)
+    parser.add_argument("--remediation-plan", type=Path)
     parser.add_argument("--redaction-report", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
