@@ -52,6 +52,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     plan_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     plan_parser.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL,QASM")
     plan_parser.add_argument("--budget-steps", type=int, default=100)
+    plan_parser.add_argument("--enforce-operator-registry", action="store_true")
+    plan_parser.add_argument("--operator-registry", type=Path, action="append")
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("plan", type=Path)
@@ -115,6 +117,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
     lifecycle_parser.add_argument("--enable-io", action="store_true")
+    lifecycle_parser.add_argument("--enforce-operator-registry", action="store_true")
+    lifecycle_parser.add_argument("--operator-registry", type=Path, action="append")
 
     demo_parser = subparsers.add_parser("demo")
     demo_subparsers = demo_parser.add_subparsers(dest="demo_name", required=True)
@@ -284,6 +288,8 @@ def _cmd_plan(args: argparse.Namespace) -> int:
         public_key_path=args.pub,
         allowed_backends=_parse_backends(args.allowed_backends),
         budget_steps=args.budget_steps,
+        operator_registry_enforced=args.enforce_operator_registry,
+        operator_registry_paths=args.operator_registry,
     )
     execution_plan = plan_program(program_ir, ctx)
     plan_dict = execution_plan.to_dict()
@@ -633,6 +639,8 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                 public_key_path=args.pub,
                 allowed_backends=_parse_backends(args.allowed_backends),
                 budget_steps=args.budget_steps,
+                operator_registry_enforced=args.enforce_operator_registry,
+                operator_registry_paths=args.operator_registry,
                 emit_effect_steps=use_kernel,
                 backend_target=backend,
                 artifact_paths=None,

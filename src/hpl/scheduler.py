@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .trace import emit_witness_record
 from .execution_token import ExecutionToken
+from .operators import registry as operator_registry
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +66,8 @@ class SchedulerContext:
     ns_observables_path: Optional[Path] = None
     ns_pressure_path: Optional[Path] = None
     ns_gate_certificate_path: Optional[Path] = None
+    operator_registry_enforced: bool = False
+    operator_registry_paths: Optional[List[Path]] = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,8 @@ class ExecutionPlan:
     verification: Optional[Dict[str, object]]
     witness_records: List[Dict[str, object]]
     execution_token: Optional[Dict[str, object]] = None
+    operator_registry_enforced: bool = False
+    operator_registry_paths: Optional[List[str]] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -88,6 +93,8 @@ class ExecutionPlan:
             "verification": self.verification,
             "witness_records": list(self.witness_records),
             "execution_token": self.execution_token,
+            "operator_registry_enforced": self.operator_registry_enforced,
+            "operator_registry_paths": list(self.operator_registry_paths or []),
         }
 
 
@@ -107,6 +114,18 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         measurement_modes_allowed=ctx.measurement_modes_allowed,
         collapse_requires_delta_s=ctx.collapse_requires_delta_s,
     )
+
+    registry_sources: List[str] = []
+    if ctx.operator_registry_enforced:
+        registry = operator_registry.load_operator_registries(
+            root=ctx.root, registry_paths=ctx.operator_registry_paths
+        )
+        registry_sources = [str(path.relative_to(ctx.root)) for path in registry.sources]
+        ok, registry_errors = operator_registry.validate_program_operators(
+            program_ir, registry, enforce=True
+        )
+        if not ok:
+            reasons.extend(registry_errors)
 
     if ctx.require_epoch_verification:
         verification, verification_errors = _verify_epoch_and_signature(ctx)
@@ -138,6 +157,8 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         "reasons": list(reasons),
         "verification": verification,
         "execution_token": token.to_dict(),
+        "operator_registry_enforced": ctx.operator_registry_enforced,
+        "operator_registry_paths": registry_sources,
     }
     plan_id = _digest_text(_canonical_json(plan_core))
 
@@ -159,6 +180,8 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         verification=verification,
         witness_records=witness_records,
         execution_token=token.to_dict(),
+        operator_registry_enforced=ctx.operator_registry_enforced,
+        operator_registry_paths=registry_sources,
     )
 
 

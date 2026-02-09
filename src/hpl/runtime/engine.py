@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 from ..trace import emit_witness_record
 from ..audit.constraint_witness import build_constraint_witness
 from ..execution_token import ExecutionToken
+from ..operators import registry as operator_registry
 from .context import RuntimeContext
 from .contracts import ExecutionContract
 from .effects import EffectStep, EffectResult, EffectType, get_handler
@@ -117,6 +118,34 @@ class RuntimeEngine:
             )
 
         steps = _steps_from_plan(plan_dict)
+        if plan_dict.get("operator_registry_enforced"):
+            registry_paths = plan_dict.get("operator_registry_paths", [])
+            resolved_paths = [
+                ROOT / str(path) for path in registry_paths if str(path).strip()
+            ]
+            registry = operator_registry.load_operator_registries(
+                root=ROOT, registry_paths=resolved_paths or None
+            )
+            ok, registry_errors = operator_registry.validate_plan_operators(
+                steps, registry, enforce=True
+            )
+            if not ok:
+                reasons.extend(registry_errors)
+                witness_records.append(
+                    _build_witness(
+                        stage="operator_registry_denied",
+                        artifact_digests={
+                            "registry_errors": _digest_text(
+                                _canonical_json(registry_errors)
+                            )
+                        },
+                        timestamp=ctx.timestamp,
+                        attestation="operator_registry_denied_witness",
+                    )
+                )
+        if reasons:
+            steps = []
+
         for step in steps:
             effect_type = str(step.get("effect_type", ""))
             if remaining_steps is not None and remaining_steps <= 0:
