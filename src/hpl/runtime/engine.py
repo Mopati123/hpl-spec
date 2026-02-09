@@ -13,6 +13,7 @@ from ..trace import emit_witness_record
 from ..audit.constraint_witness import build_constraint_witness
 from ..execution_token import ExecutionToken
 from ..operators import registry as operator_registry
+from ..observers import papas
 from .context import RuntimeContext
 from .contracts import ExecutionContract
 from .effects import EffectStep, EffectResult, EffectType, get_handler
@@ -34,6 +35,7 @@ class RuntimeResult:
     witness_records: List[Dict[str, object]]
     constraint_witnesses: List[Dict[str, object]]
     transcript: List[Dict[str, object]]
+    observer_reports: List[Dict[str, object]]
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -45,6 +47,7 @@ class RuntimeResult:
             "witness_records": list(self.witness_records),
             "constraint_witnesses": list(self.constraint_witnesses),
             "transcript": list(self.transcript),
+            "observer_reports": list(self.observer_reports),
         }
 
 
@@ -61,6 +64,7 @@ class RuntimeEngine:
         constraint_witnesses: List[Dict[str, object]] = []
         verification: Optional[Dict[str, object]] = None
         transcript: List[Dict[str, object]] = []
+        observer_reports: List[Dict[str, object]] = []
         evidence_roles: set[str] = set()
         execution_token = ctx.execution_token or _token_from_plan(plan)
         if execution_token is None:
@@ -77,6 +81,7 @@ class RuntimeEngine:
                 execution_token=execution_token,
                 requested_backend=ctx.requested_backend,
                 io_enabled=ctx.io_enabled,
+                constraint_inversion_v1=ctx.constraint_inversion_v1,
             )
         remaining_steps = None
         remaining_delta_s = None
@@ -258,15 +263,21 @@ class RuntimeEngine:
         status = "completed" if not reasons else "denied"
 
         if status == "denied":
-            constraint_witnesses.append(
-                build_constraint_witness(
-                    stage="runtime_refusal",
-                    refusal_reasons=reasons,
-                    artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
-                    observer_id="papas",
-                    timestamp=None,
-                )
+            witness = build_constraint_witness(
+                stage="runtime_refusal",
+                refusal_reasons=reasons,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
             )
+            constraint_witnesses.append(witness)
+            if papas.is_enabled(ctx.observers):
+                observer_reports.append(
+                    papas.build_papas_report(
+                        witness,
+                        allow_dual_proposal=bool(ctx.constraint_inversion_v1),
+                    )
+                )
             if not constraint_witnesses:
                 raise RuntimeError("internal_error: missing constraint witness for refusal")
 
@@ -296,6 +307,7 @@ class RuntimeEngine:
             witness_records=witness_records,
             constraint_witnesses=constraint_witnesses,
             transcript=transcript,
+            observer_reports=observer_reports,
         )
 
 
