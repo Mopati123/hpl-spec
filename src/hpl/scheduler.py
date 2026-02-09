@@ -56,6 +56,9 @@ class SchedulerContext:
     trading_shadow_model_path: Optional[Path] = None
     trading_report_json_path: Optional[Path] = None
     trading_report_md_path: Optional[Path] = None
+    io_endpoint: Optional[str] = None
+    io_order: Optional[Dict[str, object]] = None
+    io_query_params: Optional[Dict[str, object]] = None
     ns_state_path: Optional[Path] = None
     ns_policy_path: Optional[Path] = None
     ns_state_final_path: Optional[Path] = None
@@ -196,6 +199,10 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         return _build_trading_paper_steps(program_ir, ctx)
     if ctx.track == "trading_shadow_mode":
         return _build_trading_shadow_steps(program_ir, ctx)
+    if ctx.track == "trading_io_shadow":
+        return _build_trading_io_shadow_steps(program_ir, ctx)
+    if ctx.track == "trading_io_live_min":
+        return _build_trading_io_live_min_steps(program_ir, ctx)
     if ctx.track == "navier_stokes":
         return _build_navier_stokes_steps(program_ir, ctx)
 
@@ -686,6 +693,190 @@ def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerCon
                 "report_md_path": report_md,
             },
             "requires": {"backend": "CLASSICAL"},
+        }
+    )
+
+    return steps
+
+
+def _build_trading_io_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    endpoint = ctx.io_endpoint or "broker://demo"
+    query_params = ctx.io_query_params or {"request": {"msg_type": "transaction"}}
+
+    add_step(
+        {
+            "step_id": f"io_connect_{index}",
+            "effect_type": "IO_CONNECT",
+            "args": {
+                "endpoint": endpoint,
+                "request_path": "io_connect_request.json",
+                "response_path": "io_connect_response.json",
+                "event_path": "io_connect_event.json",
+            },
+            "requires": {
+                "io_scope": "BROKER_CONNECT",
+                "io_endpoint": endpoint,
+            },
+        }
+    )
+    add_step(
+        {
+            "step_id": f"io_query_fills_{index}",
+            "effect_type": "IO_QUERY_FILLS",
+            "args": {
+                "endpoint": endpoint,
+                "order_id": "shadow-order",
+                "params": query_params,
+                "request_path": "io_query_request.json",
+                "response_path": "io_query_response.json",
+                "event_path": "io_query_event.json",
+            },
+            "requires": {
+                "io_scope": "ORDER_QUERY",
+                "io_endpoint": endpoint,
+            },
+        }
+    )
+    add_step(
+        {
+            "step_id": f"io_reconcile_{index}",
+            "effect_type": "IO_RECONCILE",
+            "args": {
+                "request_path": "io_query_request.json",
+                "response_path": "io_query_response.json",
+                "expected_status": "ok",
+                "outcome_path": "io_outcome.json",
+                "reconciliation_path": "reconciliation_report.json",
+            },
+            "requires": {
+                "io_scope": "RECONCILE",
+                "io_endpoint": endpoint,
+            },
+        }
+    )
+
+    return steps
+
+
+def _build_trading_io_live_min_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    steps: List[Dict[str, object]] = []
+    index = 0
+
+    def add_step(step: Dict[str, object]) -> None:
+        nonlocal index
+        steps.append(step)
+        index += 1
+
+    if ctx.require_epoch_verification and ctx.anchor_path:
+        add_step(
+            {
+                "step_id": f"verify_epoch_{index}",
+                "effect_type": "VERIFY_EPOCH",
+                "args": {"anchor_path": str(ctx.anchor_path)},
+                "requires": {},
+            }
+        )
+        if ctx.signature_path:
+            add_step(
+                {
+                    "step_id": f"verify_signature_{index}",
+                    "effect_type": "VERIFY_SIGNATURE",
+                    "args": {
+                        "anchor_path": str(ctx.anchor_path),
+                        "sig_path": str(ctx.signature_path),
+                        "pub_path": str(ctx.public_key_path),
+                    },
+                    "requires": {},
+                }
+            )
+
+    endpoint = ctx.io_endpoint or "broker://demo"
+    order_payload = ctx.io_order or {
+        "order_id": "live-min-order",
+        "symbol": "DEMO",
+        "side": "buy",
+        "qty": 1,
+    }
+
+    add_step(
+        {
+            "step_id": f"io_connect_{index}",
+            "effect_type": "IO_CONNECT",
+            "args": {
+                "endpoint": endpoint,
+                "request_path": "io_connect_request.json",
+                "response_path": "io_connect_response.json",
+                "event_path": "io_connect_event.json",
+            },
+            "requires": {
+                "io_scope": "BROKER_CONNECT",
+                "io_endpoint": endpoint,
+            },
+        }
+    )
+    add_step(
+        {
+            "step_id": f"io_submit_order_{index}",
+            "effect_type": "IO_SUBMIT_ORDER",
+            "args": {
+                "endpoint": endpoint,
+                "order": order_payload,
+                "request_path": "io_submit_request.json",
+                "response_path": "io_submit_response.json",
+                "event_path": "io_submit_event.json",
+            },
+            "requires": {
+                "io_scope": "ORDER_SUBMIT",
+                "io_endpoint": endpoint,
+            },
+        }
+    )
+    add_step(
+        {
+            "step_id": f"io_reconcile_{index}",
+            "effect_type": "IO_RECONCILE",
+            "args": {
+                "request_path": "io_submit_request.json",
+                "response_path": "io_submit_response.json",
+                "expected_status": "accepted",
+                "outcome_path": "io_outcome.json",
+                "reconciliation_path": "reconciliation_report.json",
+            },
+            "requires": {
+                "io_scope": "RECONCILE",
+                "io_endpoint": endpoint,
+            },
         }
     )
 
