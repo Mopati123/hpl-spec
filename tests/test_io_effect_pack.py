@@ -82,6 +82,7 @@ class IOEffectPackTests(unittest.TestCase):
             {
                 "io_allowed": True,
                 "io_scopes": ["ORDER_CANCEL"],
+                "io_mode": "live",
                 "io_endpoints_allowed": ["broker://allowed"],
             }
         )

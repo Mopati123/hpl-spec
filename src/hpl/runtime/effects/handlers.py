@@ -1349,13 +1349,52 @@ def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str
     allowed_scopes = {str(item).upper() for item in token.io_policy.get("io_scopes", []) if str(item).strip()}
     if required_scope.upper() not in allowed_scopes:
         return _refuse(step, "IOPermissionDenied", [f"missing scope: {required_scope}"])
+    if required_scope.upper() in {"ORDER_SUBMIT", "ORDER_CANCEL"}:
+        mode = str(token.io_policy.get("io_mode", "dry_run")).lower()
+        if mode != "live":
+            return _refuse(step, "IOModeNotAllowed", ["io_mode not live"])
     endpoint = str(step.args.get("endpoint", "")).strip()
     allowed_endpoints = {
         str(item) for item in token.io_policy.get("io_endpoints_allowed", []) if str(item).strip()
     }
     if endpoint and allowed_endpoints and endpoint not in allowed_endpoints:
         return _refuse(step, "EndpointNotAllowed", [f"endpoint not allowed: {endpoint}"])
+    timeout_ms = _io_timeout_policy(token.io_policy)
+    requested_timeout = _requested_timeout(step.args, timeout_ms)
+    if requested_timeout > timeout_ms:
+        return _refuse(step, "IOTimeout", [f"timeout_bucket=T{timeout_ms}ms"])
     return None
+
+
+def _io_timeout_policy(io_policy: Optional[Dict[str, object]]) -> int:
+    if not isinstance(io_policy, dict):
+        return 2500
+    try:
+        return int(io_policy.get("io_timeout_ms", 2500))
+    except (TypeError, ValueError):
+        return 2500
+
+
+def _requested_timeout(args: Dict[str, object], default_timeout: int) -> int:
+    params = args.get("params", {})
+    value = None
+    if isinstance(params, dict):
+        value = params.get("timeout_ms")
+    if value is None:
+        value = args.get("timeout_ms")
+    try:
+        return int(value) if value is not None else int(default_timeout)
+    except (TypeError, ValueError):
+        return int(default_timeout)
+
+
+def _derive_nonce(policy: str, step_id: str, payload: Dict[str, object]) -> str:
+    core = {
+        "policy": policy,
+        "step_id": step_id,
+        "payload_hash": _digest_bytes(_canonical_json(payload).encode("utf-8")),
+    }
+    return _digest_bytes(_canonical_json(core).encode("utf-8"))
 
 
 def _build_io_request(
@@ -1365,14 +1404,23 @@ def _build_io_request(
     extra: Optional[Dict[str, object]] = None,
 ) -> Dict[str, object]:
     endpoint = str(step.args.get("endpoint", "")).strip()
+    io_policy = ctx.execution_token.io_policy if ctx.execution_token else None
+    io_timeout_ms = _io_timeout_policy(io_policy)
+    requested_timeout = _requested_timeout(step.args, io_timeout_ms)
     payload = {
         "action": action,
         "endpoint": endpoint,
         "token_id": ctx.execution_token.token_id if ctx.execution_token else None,
         "params": _sanitize_payload(step.args.get("params", {})),
+        "timeout_ms": requested_timeout,
+        "io_mode": io_policy.get("io_mode", "dry_run") if isinstance(io_policy, dict) else "dry_run",
+        "redaction_policy_id": io_policy.get("io_redaction_policy_id", "R1") if isinstance(io_policy, dict) else "R1",
     }
     if extra:
         payload.update(extra)
+    nonce_policy = io_policy.get("io_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1") if isinstance(io_policy, dict) else "HPL_DETERMINISTIC_NONCE_V1"
+    payload["nonce_policy"] = nonce_policy
+    payload["nonce"] = _derive_nonce(nonce_policy, step.step_id, payload)
     request_id = _request_id(_canonical_json(payload))
     payload["request_id"] = request_id
     return payload

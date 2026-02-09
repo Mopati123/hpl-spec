@@ -38,12 +38,22 @@ def _normalize_io_policy(io_policy: Optional[Dict[str, object]]) -> Optional[Dic
     io_budget_calls = int(io_policy.get("io_budget_calls")) if "io_budget_calls" in io_policy else None
     io_requires_reconciliation = bool(io_policy.get("io_requires_reconciliation", True))
     io_requires_delta_s = bool(io_policy.get("io_requires_delta_s", False))
+    io_mode = str(io_policy.get("io_mode", "dry_run")).lower()
+    if io_mode not in {"dry_run", "live"}:
+        io_mode = "dry_run"
+    io_timeout_ms = int(io_policy.get("io_timeout_ms", 2500))
+    io_nonce_policy = str(io_policy.get("io_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1"))
+    io_redaction_policy_id = str(io_policy.get("io_redaction_policy_id", "R1"))
     normalized: Dict[str, object] = {
         "io_allowed": io_allowed,
         "io_scopes": io_scopes,
         "io_endpoints_allowed": io_endpoints_allowed,
         "io_requires_reconciliation": io_requires_reconciliation,
         "io_requires_delta_s": io_requires_delta_s,
+        "io_mode": io_mode,
+        "io_timeout_ms": io_timeout_ms,
+        "io_nonce_policy": io_nonce_policy,
+        "io_redaction_policy_id": io_redaction_policy_id,
     }
     if io_budget_calls is not None:
         normalized["io_budget_calls"] = io_budget_calls
