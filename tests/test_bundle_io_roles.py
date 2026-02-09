@@ -95,6 +95,38 @@ class BundleIORolesTests(unittest.TestCase):
             )
             self.assertFalse(manifest["io_lane_v1"]["ok"])
             self.assertIn("rollback_record", manifest["io_lane_v1"]["missing_required"])
+            self.assertIn("remediation_plan", manifest["io_lane_v1"]["missing_required"])
+
+    def test_refusal_requires_remediation(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            request = tmp / "io_request.json"
+            response = tmp / "io_response.json"
+            outcome = tmp / "io_outcome.json"
+            reconciliation = tmp / "reconciliation_report.json"
+            redaction = tmp / "redaction_report.json"
+            _write_json(request, {"request_id": "req-3"})
+            _write_json(response, {"status": "error"})
+            _write_json(outcome, {"action": "refuse", "ok": False})
+            _write_json(reconciliation, {"ok": False})
+            _write_json(redaction, {"ok": True, "findings": []})
+
+            artifacts = [
+                bundle_evidence._artifact("io_request_log", request),
+                bundle_evidence._artifact("io_response_log", response),
+                bundle_evidence._artifact("io_outcome", outcome),
+                bundle_evidence._artifact("reconciliation_report", reconciliation),
+                bundle_evidence._artifact("redaction_report", redaction),
+            ]
+            _, manifest = bundle_evidence.build_bundle(
+                out_dir=tmp,
+                artifacts=artifacts,
+                epoch_anchor=None,
+                epoch_sig=None,
+                public_key=None,
+            )
+            self.assertFalse(manifest["io_lane_v1"]["ok"])
+            self.assertIn("remediation_plan", manifest["io_lane_v1"]["missing_required"])
 
 
 if __name__ == "__main__":

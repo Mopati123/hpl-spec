@@ -90,6 +90,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle_parser.add_argument("--io-outcome", type=Path)
     bundle_parser.add_argument("--reconciliation-report", type=Path)
     bundle_parser.add_argument("--rollback-record", type=Path)
+    bundle_parser.add_argument("--remediation-plan", type=Path)
     bundle_parser.add_argument("--redaction-report", type=Path)
     bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
@@ -404,6 +405,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
     add_artifact("io_outcome", args.io_outcome)
     add_artifact("reconciliation_report", args.reconciliation_report)
     add_artifact("rollback_record", args.rollback_record)
+    add_artifact("remediation_plan", args.remediation_plan)
     add_artifact("redaction_report", args.redaction_report)
 
     extras = sorted(args.extra or [], key=lambda p: str(p))
@@ -1685,6 +1687,7 @@ def _cmd_demo_trading_io_shadow(args: argparse.Namespace) -> int:
             ("io_event_log", work_dir / "io_query_event.json"),
             ("io_outcome", work_dir / "io_outcome.json"),
             ("reconciliation_report", work_dir / "reconciliation_report.json"),
+            ("remediation_plan", work_dir / "remediation_plan.json"),
         ]
         for role, path in io_role_paths:
             if path.exists():
@@ -1875,6 +1878,7 @@ def _cmd_demo_trading_io_live_min(args: argparse.Namespace) -> int:
             ("io_event_log", work_dir / "io_submit_event.json"),
             ("io_outcome", work_dir / "io_outcome.json"),
             ("reconciliation_report", work_dir / "reconciliation_report.json"),
+            ("remediation_plan", work_dir / "remediation_plan.json"),
         ]
         for role, path in io_role_paths:
             if path.exists():

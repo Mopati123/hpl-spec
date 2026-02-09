@@ -778,6 +778,7 @@ def _build_trading_io_shadow_steps(program_ir: Dict[str, object], ctx: Scheduler
                 "expected_status": "ok",
                 "outcome_path": "io_outcome.json",
                 "reconciliation_path": "reconciliation_report.json",
+                "remediation_path": "remediation_plan.json",
             },
             "requires": {
                 "io_scope": "RECONCILE",
@@ -872,6 +873,7 @@ def _build_trading_io_live_min_steps(program_ir: Dict[str, object], ctx: Schedul
                 "expected_status": "accepted",
                 "outcome_path": "io_outcome.json",
                 "reconciliation_path": "reconciliation_report.json",
+                "remediation_path": "remediation_plan.json",
             },
             "requires": {
                 "io_scope": "RECONCILE",

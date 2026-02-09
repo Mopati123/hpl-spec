@@ -1305,6 +1305,34 @@ def handle_io_reconcile(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     if reconciliation_path:
         digests[reconciliation_path.name] = _digest_bytes(reconciliation_path.read_bytes())
 
+    needs_remediation = action in {"rollback", "refuse"} or not ok
+    if needs_remediation:
+        remediation = {
+            "action": "halt_trading",
+            "reason": "IOAmbiguousResult",
+            "refusal_reasons": list(reasons),
+            "request_id": request.get("request_id"),
+            "response_status": status,
+            "token_id": token.token_id if token else None,
+            "step_id": step.step_id,
+            "outcome_action": action,
+            "outcome_digest": _digest_bytes(_canonical_json(outcome).encode("utf-8")),
+            "required_caps": [],
+            "next_steps": ["review_reconciliation", "adjust_policy"],
+        }
+        remediation["remediation_id"] = _digest_bytes(_canonical_json(remediation).encode("utf-8"))
+        remediation_path = _resolve_output_path(
+            ctx,
+            step.args,
+            key="remediation_path",
+            default_name="remediation_plan.json",
+        )
+        if remediation_path:
+            remediation_path.write_text(_canonical_json(remediation), encoding="utf-8")
+            digests[remediation_path.name] = _digest_bytes(remediation_path.read_bytes())
+        else:
+            digests["remediation_plan"] = _digest_bytes(_canonical_json(remediation).encode("utf-8"))
+
     if not ok:
         return _refuse(step, "IOAmbiguousResult", reasons or ["reconciliation failed"], digests)
     return _ok(step, digests)
