@@ -97,6 +97,8 @@ conformance, certification, and intake artifacts.
 - ΔS Kernel Runbook: docs/publish/delta_s_kernel_runbook.md
 - IO Lane Runbook: docs/publish/io_lane_runbook.md
 - Phase-1 Anchor Runbook: docs/publish/phase1_anchor_runbook.md
+- HPL Public Capability Statement: docs/publish/hpl_public_capability_statement.md
+- HPL Technical Spec Summary: docs/publish/hpl_technical_spec_summary.md
 
 
 
