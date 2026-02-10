@@ -4,3 +4,4 @@ __pycache__/
 
 HPL_CI_ED25519_PRIVATE_KEY*.txt
 extensions.json
+artifacts/
