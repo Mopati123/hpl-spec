@@ -1,6 +1,6 @@
 # HPL Capability Matrix
 
-Main SHA: TBD  
+Main SHA: d9866040e379bd453abb4035df3d233c873f89cf  
 Date: 2026-02-11
 
 Status legend:
