@@ -3,8 +3,10 @@
 ## Repository Role
 
 This repository is the canonical, frozen specification and governance source
-for HPL v1 -> v2.0. It also contains a partial reference implementation for the
-Level-1 pipeline and Level-2 tooling.
+for HPL. It also contains the reference governed runtime kernel and tooling.
+Execution exists, but is constitution-gated (token authority, refusal-first,
+deterministic evidence, reconciliation/rollback). Unconstrained general-purpose
+runtime is intentionally out of scope.
 
 ---
 
@@ -36,10 +38,11 @@ Other `_H` folders contain `docs/` and `manifests/` placeholders only.
 
 ---
 
-## 2) Implementation Code (Partial)
+## 2) Implementation Code (Governed Kernel)
 
-All executable code lives under `src/hpl/` and implements the Level-1 pipeline
-plus Level-2 tooling.
+All executable code lives under `src/hpl/` and implements the governed runtime
+kernel, the Level-1 pipeline, and the tooling required for evidence, anchoring,
+and IO governance.
 
 ### Core pipeline
 
@@ -47,6 +50,18 @@ plus Level-2 tooling.
 - `src/hpl/emergence/macros/expander.py`: macro expansion to axiomatic forms
 - `src/hpl/axioms/validator.py`: axiomatic validator against BNF
 - `src/hpl/dynamics/ir_emitter.py`: ProgramIR emission + schema validation
+
+### Governed runtime kernel
+
+- `src/hpl/scheduler.py`: deterministic planning + token issuance
+- `src/hpl/runtime/engine.py`: effect execution, refusal-first gating
+- `src/hpl/runtime/contracts.py`: contract preconditions/postconditions
+- `src/hpl/runtime/effects/`: effect handlers (IO, bundle, ΔS, etc.)
+- `src/hpl/runtime/io/`: governed IO lane + adapters
+- `src/hpl/observers/`: Papas observer reports (witness-only)
+- `src/hpl/execution_token.py`: token policy enforcement (IO/ΔS budgets)
+- `src/hpl/operators/registry.py`: operator registry enforcement
+- `src/hpl/audit/`: constraint witness + inversion
 
 ### Supporting utilities
 
@@ -61,14 +76,13 @@ plus Level-2 tooling.
 
 Located under `tests/`:
 
-- `test_parser.py`
-- `test_macro_expansion.py`
-- `test_axiomatic_validation.py`
-- `test_ir_emission.py`
-- `test_pipeline.py`
-- `test_registry_validator.py`
-- `test_traceability.py`
-- `test_diagnostics.py`
+- parser / macro / IR pipeline tests
+- scheduler + runtime gating tests
+- IO lane tests (policy, redaction, reconcile/rollback)
+- ΔS gate and refusal taxonomy tests
+- anchor generator + verifier tests
+- operator registry enforcement tests
+- Papas observer report tests
 
 Fixtures: `tests/fixtures/`
 
@@ -82,6 +96,8 @@ Located under `tools/`:
 - `ci_gate_prohibited_behavior.py`: Gate C (prohibited behavior scan)
 - `validate_ir_schema.py`: IR schema validation
 - `validate_operator_registries.py`: registry schema validation
+- `anchor_generator.py`: Phase-1 anchor generation
+- `verify_anchor.py`: Phase-1 anchor verification
 
 ---
 
@@ -110,9 +126,12 @@ Located under `tools/`:
 - v1.1 frozen (refined law + migration)
 - v2.0 frozen (semantic layer: scheduler, execution, observation, determinism)
 - Level-2 tooling complete and frozen
-- Level-1 implementation present and tested (parser -> macro -> validator -> IR)
+- Governed runtime kernel implemented (scheduler + runtime engine + IO lane)
+- Phase-1 anchoring implemented (Merkle root + signature + verification)
+- Operator registry enforcement implemented (opt-in hard-fail + re-validate)
+- Papas observer reports implemented (witness-only)
 
 ---
 
-If you want this overview indexed in `UNIVERSE_INDEX.md`, add a pointer under
-Publications or Audit & Evidence.
+If you want a line-by-line status map, see:
+`docs/publish/hpl_capability_matrix.md`
