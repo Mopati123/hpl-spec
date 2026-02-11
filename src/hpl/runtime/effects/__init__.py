@@ -41,6 +41,12 @@ from .handlers import (
     handle_io_emit_io_event,
     handle_io_reconcile,
     handle_io_rollback,
+    handle_net_connect,
+    handle_net_handshake,
+    handle_net_key_exchange,
+    handle_net_send,
+    handle_net_recv,
+    handle_net_close,
     handle_validate_coupling_topology,
     handle_validate_quantum_semantics,
     handle_validate_registries,
@@ -91,6 +97,12 @@ register_handler(EffectType.IO_QUERY_FILLS, handle_io_query_fills)
 register_handler(EffectType.IO_EMIT_IO_EVENT, handle_io_emit_io_event)
 register_handler(EffectType.IO_RECONCILE, handle_io_reconcile)
 register_handler(EffectType.IO_ROLLBACK, handle_io_rollback)
+register_handler(EffectType.NET_CONNECT, handle_net_connect)
+register_handler(EffectType.NET_HANDSHAKE, handle_net_handshake)
+register_handler(EffectType.NET_KEY_EXCHANGE, handle_net_key_exchange)
+register_handler(EffectType.NET_SEND, handle_net_send)
+register_handler(EffectType.NET_RECV, handle_net_recv)
+register_handler(EffectType.NET_CLOSE, handle_net_close)
 register_handler(EffectType.LOWER_BACKEND_IR, handle_lower_backend_ir)
 register_handler(EffectType.LOWER_QASM, handle_lower_qasm)
 register_handler(EffectType.BUNDLE_EVIDENCE, handle_bundle_evidence)

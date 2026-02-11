@@ -1,7 +1,7 @@
 # HPL Capability Matrix
 
-Main SHA: ccac2e45490612d8f4ef69edaf4104b0a90ff8f4  
-Date: 2026-02-10
+Main SHA: TBD  
+Date: 2026-02-11
 
 Status legend:
 - Implemented
@@ -36,6 +36,14 @@ Status legend:
 - Guarded MT5 adapter: Implemented (gated)
 - Guarded Deriv adapter: Implemented (gated)
 - Live IO by default: Out of scope
+
+## NET Lane
+- NET three-gate enablement: Implemented
+- Tokenized NET caps/allowlist/budgets: Implemented
+- Deterministic NetTimeout refusal: Implemented
+- NET stabilizer gate (deferred collapse): Implemented (gated)
+- NET adapter contract + mock adapter: Implemented (gated)
+- Live NET by default: Out of scope
 
 ## Evidence & Anchoring
 - Role-complete bundles: Implemented

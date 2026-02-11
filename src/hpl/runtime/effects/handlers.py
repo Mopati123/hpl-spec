@@ -11,6 +11,8 @@ from ...backends.classical_lowering import lower_program_ir_to_backend_ir
 from ...backends.qasm_lowering import lower_backend_ir_to_qasm
 from ..context import RuntimeContext
 from ..io.adapter import load_adapter
+from ..net.adapter import load_adapter as load_net_adapter
+from ..net.stabilizer import evaluate_stabilizer
 from ..redaction import scan_artifacts
 from .effect_step import EffectResult, EffectStep
 from .measurement_selection import build_measurement_selection
@@ -1370,6 +1372,129 @@ def handle_io_rollback(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     return _ok(step, digests)
 
 
+def handle_net_connect(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_CONNECT")
+    if policy_error:
+        return policy_error
+    request = _build_net_request(step, ctx, action="connect")
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.connect(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "connected",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="connect")
+
+
+def handle_net_handshake(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_HANDSHAKE")
+    if policy_error:
+        return policy_error
+    request = _build_net_request(step, ctx, action="handshake")
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.handshake(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "ok",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="handshake")
+
+
+def handle_net_key_exchange(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_KEY_EXCHANGE")
+    if policy_error:
+        return policy_error
+    request = _build_net_request(step, ctx, action="key_exchange")
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.key_exchange(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "ok",
+            "endpoint": request.get("endpoint"),
+            "key_fingerprint": "mock",
+            "request_id": request["request_id"],
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="key_exchange")
+
+
+def handle_net_send(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_SEND")
+    if policy_error:
+        return policy_error
+    payload = _sanitize_payload(step.args.get("payload", {}))
+    request = _build_net_request(step, ctx, action="send", extra={"payload": payload})
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.send(request.get("endpoint", ""), payload, request.get("params", {}))
+    else:
+        response = {
+            "status": "sent",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="send")
+
+
+def handle_net_recv(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_RECV")
+    if policy_error:
+        return policy_error
+    request = _build_net_request(step, ctx, action="recv")
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.recv(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "ok",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "message": {"kind": "mock"},
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="recv")
+
+
+def handle_net_close(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    policy_error = _ensure_net_policy(step, ctx, required_cap="NET_CLOSE")
+    if policy_error:
+        return policy_error
+    request = _build_net_request(step, ctx, action="close")
+    adapter = _resolve_net_adapter(step, ctx)
+    if isinstance(adapter, EffectResult):
+        return adapter
+    if adapter is not None:
+        response = adapter.close(request.get("endpoint", ""), request.get("params", {}))
+    else:
+        response = {
+            "status": "closed",
+            "endpoint": request.get("endpoint"),
+            "request_id": request["request_id"],
+            "mock": True,
+        }
+    return _emit_net_artifacts(step, ctx, request, response, event_type="close")
+
+
 def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str) -> Optional[EffectResult]:
     token = ctx.execution_token
     if token is None or token.io_policy is None or not token.io_policy.get("io_allowed", False):
@@ -1394,11 +1519,43 @@ def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str
     return None
 
 
+def _ensure_net_policy(step: EffectStep, ctx: RuntimeContext, required_cap: str) -> Optional[EffectResult]:
+    token = ctx.execution_token
+    if token is None or token.net_policy is None:
+        return _refuse(step, "NetPermissionDenied", ["net not permitted"])
+    allowed_caps = {str(item).upper() for item in token.net_policy.get("net_caps", []) if str(item).strip()}
+    if required_cap.upper() not in allowed_caps:
+        return _refuse(step, "NetPermissionDenied", [f"missing cap: {required_cap}"])
+    endpoint = str(step.args.get("endpoint", "")).strip()
+    allowlist = {
+        str(item) for item in token.net_policy.get("net_endpoints_allowlist", []) if str(item).strip()
+    }
+    if endpoint and allowlist and endpoint not in allowlist:
+        return _refuse(step, "NetEndpointNotAllowed", [f"endpoint not allowed: {endpoint}"])
+    timeout_ms = _net_timeout_policy(token.net_policy)
+    requested_timeout = _requested_timeout(step.args, timeout_ms)
+    if requested_timeout > timeout_ms:
+        return _refuse(step, "NetTimeout", [f"timeout_bucket=T{timeout_ms}ms"])
+    decision = evaluate_stabilizer(required_cap, endpoint, ctx, token.net_policy)
+    if not decision.ok:
+        return _refuse(step, decision.refusal_type or "NetPermissionDenied", decision.reasons)
+    return None
+
+
 def _io_timeout_policy(io_policy: Optional[Dict[str, object]]) -> int:
     if not isinstance(io_policy, dict):
         return 2500
     try:
         return int(io_policy.get("io_timeout_ms", 2500))
+    except (TypeError, ValueError):
+        return 2500
+
+
+def _net_timeout_policy(net_policy: Optional[Dict[str, object]]) -> int:
+    if not isinstance(net_policy, dict):
+        return 2500
+    try:
+        return int(net_policy.get("net_timeout_ms", 2500))
     except (TypeError, ValueError):
         return 2500
 
@@ -1447,6 +1604,36 @@ def _build_io_request(
     if extra:
         payload.update(extra)
     nonce_policy = io_policy.get("io_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1") if isinstance(io_policy, dict) else "HPL_DETERMINISTIC_NONCE_V1"
+    payload["nonce_policy"] = nonce_policy
+    payload["nonce"] = _derive_nonce(nonce_policy, step.step_id, payload)
+    request_id = _request_id(_canonical_json(payload))
+    payload["request_id"] = request_id
+    return payload
+
+
+def _build_net_request(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    action: str,
+    extra: Optional[Dict[str, object]] = None,
+) -> Dict[str, object]:
+    endpoint = str(step.args.get("endpoint", "")).strip()
+    net_policy = ctx.execution_token.net_policy if ctx.execution_token else None
+    net_timeout_ms = _net_timeout_policy(net_policy)
+    requested_timeout = _requested_timeout(step.args, net_timeout_ms)
+    payload = {
+        "action": action,
+        "endpoint": endpoint,
+        "token_id": ctx.execution_token.token_id if ctx.execution_token else None,
+        "params": _sanitize_payload(step.args.get("params", {})),
+        "timeout_ms": requested_timeout,
+        "net_mode": net_policy.get("net_mode", "dry_run") if isinstance(net_policy, dict) else "dry_run",
+        "crypto_policy_id": net_policy.get("net_crypto_policy_id", "QKX1") if isinstance(net_policy, dict) else "QKX1",
+        "redaction_policy_id": net_policy.get("net_redaction_policy_id", "R1") if isinstance(net_policy, dict) else "R1",
+    }
+    if extra:
+        payload.update(extra)
+    nonce_policy = net_policy.get("net_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1") if isinstance(net_policy, dict) else "HPL_DETERMINISTIC_NONCE_V1"
     payload["nonce_policy"] = nonce_policy
     payload["nonce"] = _derive_nonce(nonce_policy, step.step_id, payload)
     request_id = _request_id(_canonical_json(payload))
@@ -1506,6 +1693,74 @@ def _emit_io_artifacts(
     return _ok(step, digests)
 
 
+def _emit_net_artifacts(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    request: Dict[str, object],
+    response: Dict[str, object],
+    event_type: str,
+) -> EffectResult:
+    request = _sanitize_payload(request)
+    response = _sanitize_payload(response)
+    request_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="request_path",
+        default_name=f"net_{event_type}_request.json",
+    )
+    response_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="response_path",
+        default_name=f"net_{event_type}_response.json",
+    )
+    event_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="event_path",
+        default_name=f"net_{event_type}_event.json",
+    )
+    session_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="session_manifest_path",
+        default_name="net_session_manifest.json",
+    )
+
+    digests: Dict[str, str] = {}
+    if request_path:
+        request_path.write_text(_canonical_json(request), encoding="utf-8")
+        digests[request_path.name] = _digest_bytes(request_path.read_bytes())
+    if response_path:
+        response_path.write_text(_canonical_json(response), encoding="utf-8")
+        digests[response_path.name] = _digest_bytes(response_path.read_bytes())
+
+    event = {
+        "event_type": event_type,
+        "request_id": request.get("request_id"),
+        "endpoint": request.get("endpoint"),
+        "status": response.get("status"),
+    }
+    if event_path:
+        event_path.write_text(_canonical_json(event), encoding="utf-8")
+        digests[event_path.name] = _digest_bytes(event_path.read_bytes())
+
+    net_policy = ctx.execution_token.net_policy if ctx.execution_token else {}
+    session_manifest = {
+        "endpoint": request.get("endpoint"),
+        "token_id": ctx.execution_token.token_id if ctx.execution_token else None,
+        "net_mode": net_policy.get("net_mode", "dry_run") if isinstance(net_policy, dict) else "dry_run",
+        "crypto_policy_id": net_policy.get("net_crypto_policy_id", "QKX1") if isinstance(net_policy, dict) else "QKX1",
+        "redaction_policy_id": net_policy.get("net_redaction_policy_id", "R1") if isinstance(net_policy, dict) else "R1",
+        "nonce_policy": net_policy.get("net_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1") if isinstance(net_policy, dict) else "HPL_DETERMINISTIC_NONCE_V1",
+    }
+    if session_path:
+        session_path.write_text(_canonical_json(session_manifest), encoding="utf-8")
+        digests[session_path.name] = _digest_bytes(session_path.read_bytes())
+
+    return _ok(step, digests)
+
+
 def _emit_io_event(step: EffectStep, ctx: RuntimeContext, event: Dict[str, object]) -> EffectResult:
     event = _sanitize_payload(event)
     event_path = _resolve_output_path(
@@ -1547,6 +1802,22 @@ def _resolve_io_adapter(step: EffectStep, ctx: RuntimeContext) -> object:
         return load_adapter()
     except Exception as exc:
         return _refuse(step, "IOAdapterUnavailable", [str(exc)])
+
+
+def _resolve_net_adapter(step: EffectStep, ctx: RuntimeContext) -> object:
+    if not ctx.net_enabled:
+        return None
+    net_policy = ctx.execution_token.net_policy if ctx.execution_token else None
+    if isinstance(net_policy, dict):
+        mode = str(net_policy.get("net_mode", "dry_run")).lower()
+        if mode != "live":
+            return None
+    if os.getenv("HPL_NET_ENABLED") != "1":
+        return _refuse(step, "NetGuardNotEnabled", ["HPL_NET_ENABLED not set"])
+    try:
+        return load_net_adapter()
+    except Exception as exc:
+        return _refuse(step, "NetAdapterUnavailable", [str(exc)])
 
 
 def _looks_like_secret_key(key: str) -> bool:

@@ -76,6 +76,9 @@ def main() -> int:
     io_section = manifest.get("io_lane_v1")
     if isinstance(io_section, dict):
         overall_ok = overall_ok and bool(io_section.get("ok", True))
+    net_section = manifest.get("net_lane_v1")
+    if isinstance(net_section, dict):
+        overall_ok = overall_ok and bool(net_section.get("ok", True))
     overall_ok = overall_ok and bundle_verify_ok
     if args.verify_bundle and not bundle_verify_ok:
         print(_canonical_json({"ok": False, "errors": bundle_verify_errors}))
@@ -137,6 +140,11 @@ def build_bundle(
         manifest["io_lane_v1"] = io_section
         manifest["io_lane_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
+    net_section = _net_section(artifacts)
+    if net_section.get("net_present"):
+        manifest["net_lane_v1"] = net_section
+        manifest["net_lane_v1"]["evidence_manifest"] = "bundle_manifest.json"
+
     return bundle_dir, manifest
 
 
@@ -167,6 +175,10 @@ def _collect_artifacts(args: argparse.Namespace) -> List[Artifact]:
         "rollback_record": args.rollback_record,
         "remediation_plan": args.remediation_plan,
         "redaction_report": args.redaction_report,
+        "net_request_log": args.net_request_log,
+        "net_response_log": args.net_response_log,
+        "net_event_log": args.net_event_log,
+        "net_session_manifest": args.net_session_manifest,
     }
 
     artifacts: List[Artifact] = []
@@ -345,6 +357,42 @@ def _io_section(artifacts: List[Artifact]) -> Dict[str, object]:
     }
 
 
+def _net_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    present_roles = sorted({artifact.role for artifact in artifacts})
+    net_detect_roles = {
+        "net_request_log",
+        "net_response_log",
+        "net_event_log",
+        "net_session_manifest",
+    }
+    net_present = any(role in net_detect_roles for role in present_roles)
+    if not net_present:
+        return {
+            "ok": True,
+            "net_present": False,
+            "required_roles": [],
+            "present_roles": present_roles,
+            "missing_required": [],
+        }
+
+    required_roles = [
+        "net_request_log",
+        "net_response_log",
+        "net_event_log",
+        "net_session_manifest",
+        "redaction_report",
+    ]
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    ok = not missing_required
+    return {
+        "ok": ok,
+        "net_present": True,
+        "required_roles": required_roles,
+        "present_roles": present_roles,
+        "missing_required": missing_required,
+    }
+
+
 def _load_execution_token(artifacts: List[Artifact]) -> Optional[Dict[str, object]]:
     for artifact in artifacts:
         if artifact.role != "execution_token":
@@ -485,6 +533,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--rollback-record", type=Path)
     parser.add_argument("--remediation-plan", type=Path)
     parser.add_argument("--redaction-report", type=Path)
+    parser.add_argument("--net-request-log", type=Path)
+    parser.add_argument("--net-response-log", type=Path)
+    parser.add_argument("--net-event-log", type=Path)
+    parser.add_argument("--net-session-manifest", type=Path)
     parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     parser.add_argument("--extra", type=Path, action="append", default=[])
     parser.add_argument("--quantum-semantics-v1", action="store_true")

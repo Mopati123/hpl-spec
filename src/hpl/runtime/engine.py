@@ -82,10 +82,12 @@ class RuntimeEngine:
                 requested_backend=ctx.requested_backend,
                 io_enabled=ctx.io_enabled,
                 constraint_inversion_v1=ctx.constraint_inversion_v1,
+                net_enabled=ctx.net_enabled,
             )
         remaining_steps = None
         remaining_delta_s = None
         remaining_io_calls = None
+        remaining_net_calls = None
         if ctx.execution_token is not None:
             remaining_steps = int(ctx.execution_token.budget_steps)
             if ctx.execution_token.delta_s_budget:
@@ -94,6 +96,10 @@ class RuntimeEngine:
                 io_budget = ctx.execution_token.io_policy.get("io_budget_calls")
                 if io_budget is not None:
                     remaining_io_calls = int(io_budget)
+            if ctx.execution_token.net_policy and "net_budget_calls" in ctx.execution_token.net_policy:
+                net_budget = ctx.execution_token.net_policy.get("net_budget_calls")
+                if net_budget is not None:
+                    remaining_net_calls = int(net_budget)
 
         witness_records.append(
             _build_witness(
@@ -190,6 +196,19 @@ class RuntimeEngine:
                     )
                     break
                 remaining_io_calls -= 1
+            if remaining_net_calls is not None and _requires_net(step):
+                if remaining_net_calls <= 0:
+                    reasons.append("NetBudgetExceeded")
+                    witness_records.append(
+                        _build_witness(
+                            stage="net_budget_denied",
+                            artifact_digests={"step": _digest_text(_canonical_json(step))},
+                            timestamp=ctx.timestamp,
+                            attestation="net_budget_denied_witness",
+                        )
+                    )
+                    break
+                remaining_net_calls -= 1
 
             if _requires_delta_s(step, ctx.execution_token):
                 required_roles = _required_delta_s_roles(step)
@@ -519,3 +538,10 @@ def _requires_io(step: Dict[str, object]) -> bool:
     if not isinstance(requires, dict):
         return False
     return bool(requires.get("io_scope") or requires.get("io_scopes") or requires.get("io_endpoint"))
+
+
+def _requires_net(step: Dict[str, object]) -> bool:
+    requires = step.get("requires")
+    if not isinstance(requires, dict):
+        return False
+    return bool(requires.get("net_cap") or requires.get("net_caps") or requires.get("net_endpoint"))

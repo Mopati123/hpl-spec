@@ -58,6 +58,7 @@ and IO governance.
 - `src/hpl/runtime/contracts.py`: contract preconditions/postconditions
 - `src/hpl/runtime/effects/`: effect handlers (IO, bundle, ΔS, etc.)
 - `src/hpl/runtime/io/`: governed IO lane + adapters
+- `src/hpl/runtime/net/`: governed NET lane + adapters
 - `src/hpl/observers/`: Papas observer reports (witness-only)
 - `src/hpl/execution_token.py`: token policy enforcement (IO/ΔS budgets)
 - `src/hpl/operators/registry.py`: operator registry enforcement

@@ -64,6 +64,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     run_parser.add_argument("--backend", choices=["classical", "qasm"])
     run_parser.add_argument("--enable-io", action="store_true")
+    run_parser.add_argument("--enable-net", action="store_true")
 
     lower_parser = subparsers.add_parser("lower")
     lower_parser.add_argument("--backend", choices=["classical", "qasm"], required=True)
@@ -94,6 +95,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     bundle_parser.add_argument("--rollback-record", type=Path)
     bundle_parser.add_argument("--remediation-plan", type=Path)
     bundle_parser.add_argument("--redaction-report", type=Path)
+    bundle_parser.add_argument("--net-request-log", type=Path)
+    bundle_parser.add_argument("--net-response-log", type=Path)
+    bundle_parser.add_argument("--net-event-log", type=Path)
+    bundle_parser.add_argument("--net-session-manifest", type=Path)
     bundle_parser.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
     bundle_parser.add_argument("--extra", type=Path, action="append", default=[])
     bundle_parser.add_argument("--quantum-semantics-v1", action="store_true")
@@ -117,6 +122,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     lifecycle_parser.add_argument("--budget-steps", type=int, default=100)
     lifecycle_parser.add_argument("--legacy", action="store_true")
     lifecycle_parser.add_argument("--enable-io", action="store_true")
+    lifecycle_parser.add_argument("--enable-net", action="store_true")
     lifecycle_parser.add_argument("--enforce-operator-registry", action="store_true")
     lifecycle_parser.add_argument("--operator-registry", type=Path, action="append")
 
@@ -204,6 +210,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     trading_io_live_demo.add_argument("--budget-steps", type=int, default=100)
     trading_io_live_demo.add_argument("--constraint-inversion-v1", action="store_true")
     trading_io_live_demo.add_argument("--enable-io", action="store_true")
+    trading_io_live_demo.add_argument("--enable-net", action="store_true")
     ns_demo = demo_subparsers.add_parser("navier-stokes")
     ns_demo.add_argument("--out-dir", type=Path, required=True)
     ns_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
@@ -218,6 +225,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     ns_demo.add_argument("--budget-steps", type=int, default=100)
     ns_demo.add_argument("--constraint-inversion-v1", action="store_true")
     ns_demo.add_argument("--enable-io", action="store_true")
+    ns_demo.add_argument("--enable-net", action="store_true")
+    net_shadow_demo = demo_subparsers.add_parser("net-shadow")
+    net_shadow_demo.add_argument("--out-dir", type=Path, required=True)
+    net_shadow_demo.add_argument("--input", type=Path, default=Path("examples/momentum_trade.hpl"))
+    net_shadow_demo.add_argument("--endpoint", type=str, default="net://demo")
+    net_shadow_demo.add_argument("--message", type=str, default="hello")
+    net_shadow_demo.add_argument("--net-timeout-ms", type=int, default=2500)
+    net_shadow_demo.add_argument("--signing-key", type=Path)
+    net_shadow_demo.add_argument("--pub", type=Path, default=DEFAULT_PUBLIC_KEY)
+    net_shadow_demo.add_argument("--require-epoch", action="store_true")
+    net_shadow_demo.add_argument("--anchor", type=Path)
+    net_shadow_demo.add_argument("--sig", type=Path)
+    net_shadow_demo.add_argument("--allowed-backends", type=str, default="PYTHON,CLASSICAL")
+    net_shadow_demo.add_argument("--budget-steps", type=int, default=100)
+    net_shadow_demo.add_argument("--constraint-inversion-v1", action="store_true")
+    net_shadow_demo.add_argument("--enable-io", action="store_true")
+    net_shadow_demo.add_argument("--enable-net", action="store_true")
 
     invert_parser = subparsers.add_parser("invert")
     invert_parser.add_argument("--witness", type=Path, required=True)
@@ -322,6 +346,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         execution_token=execution_token,
         requested_backend=_normalize_backend(args.backend) if args.backend else None,
         io_enabled=getattr(args, "enable_io", False),
+        net_enabled=getattr(args, "enable_net", False),
     )
     contract = _load_contract(args.contract, plan_dict)
     if args.backend:
@@ -413,6 +438,10 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
     add_artifact("rollback_record", args.rollback_record)
     add_artifact("remediation_plan", args.remediation_plan)
     add_artifact("redaction_report", args.redaction_report)
+    add_artifact("net_request_log", args.net_request_log)
+    add_artifact("net_response_log", args.net_response_log)
+    add_artifact("net_event_log", args.net_event_log)
+    add_artifact("net_session_manifest", args.net_session_manifest)
 
     extras = sorted(args.extra or [], key=lambda p: str(p))
     for idx, path in enumerate(extras):
@@ -481,6 +510,15 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         if missing_required:
             io_errors.append(f"missing_required={','.join(missing_required)}")
 
+    net_errors: List[str] = []
+    net_section = manifest.get("net_lane_v1")
+    if isinstance(net_section, dict) and not net_section.get("ok", True):
+        ok = False
+        net_errors.append("net lane roles incomplete")
+        missing_required = net_section.get("missing_required", [])
+        if missing_required:
+            net_errors.append(f"missing_required={','.join(missing_required)}")
+
     if args.sign_bundle:
         if not args.signing_key:
             ok = False
@@ -509,7 +547,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         evidence_path,
         command="bundle",
         ok=ok,
-        errors=quantum_errors + delta_errors + io_errors + bundle_sig_errors,
+        errors=quantum_errors + delta_errors + io_errors + net_errors + bundle_sig_errors,
         inputs=evidence_inputs,
         outputs={"bundle_manifest": _digest_file(manifest_path)},
     )
@@ -518,7 +556,7 @@ def _cmd_bundle(args: argparse.Namespace) -> int:
         "ok": ok,
         "bundle_path": str(bundle_dir),
         "bundle_id": manifest.get("bundle_id"),
-        "errors": quantum_errors + delta_errors + io_errors + bundle_sig_errors,
+        "errors": quantum_errors + delta_errors + io_errors + net_errors + bundle_sig_errors,
     }
     print(_canonical_json(summary))
     return 0
@@ -687,6 +725,7 @@ def _cmd_lifecycle(args: argparse.Namespace) -> int:
                 ci_pubkey_path=args.pub,
                 execution_token=execution_token,
                 io_enabled=getattr(args, "enable_io", False),
+                net_enabled=getattr(args, "enable_net", False),
                 requested_backend=_normalize_backend(backend),
                 trace_sink=work_dir if use_kernel else None,
             )
@@ -908,6 +947,8 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         return _cmd_demo_trading_io_live_min(args)
     if args.demo_name == "navier-stokes":
         return _cmd_demo_navier_stokes(args)
+    if args.demo_name == "net-shadow":
+        return _cmd_demo_net_shadow(args)
     print(_canonical_json({"ok": False, "errors": ["unknown demo"]}))
     return 0
 
@@ -972,6 +1013,7 @@ def _cmd_demo_ci_governance(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             requested_backend=_normalize_backend(args.backend),
             trace_sink=work_dir,
         )
@@ -1152,6 +1194,7 @@ def _cmd_demo_agent_governance(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1313,6 +1356,7 @@ def _cmd_demo_trading_paper(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1484,6 +1528,7 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1664,6 +1709,7 @@ def _cmd_demo_trading_io_shadow(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -1855,6 +1901,7 @@ def _cmd_demo_trading_io_live_min(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -2038,6 +2085,7 @@ def _cmd_demo_navier_stokes(args: argparse.Namespace) -> int:
             ci_pubkey_path=args.pub,
             execution_token=execution_token,
             io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
             trace_sink=work_dir,
         )
         allowed_steps = {
@@ -2103,6 +2151,211 @@ def _cmd_demo_navier_stokes(args: argparse.Namespace) -> int:
         if not ok:
             constraint_witness = build_constraint_witness(
                 stage="navier_stokes_refusal",
+                refusal_reasons=errors,
+                artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
+                observer_id="papas",
+                timestamp=None,
+            )
+            dual_proposal = invert_constraints(constraint_witness)
+            _write_json(work_dir / "constraint_witness.json", constraint_witness)
+            _write_json(work_dir / "dual_proposal.json", dual_proposal)
+
+            artifacts.append(bundle_module._artifact("constraint_witness", work_dir / "constraint_witness.json"))
+            artifacts.append(bundle_module._artifact("dual_proposal", work_dir / "dual_proposal.json"))
+
+            bundle_dir, manifest = bundle_module.build_bundle(
+                out_dir=out_dir,
+                artifacts=artifacts,
+                epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+                epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+                public_key=args.pub,
+                constraint_inversion_v1=args.constraint_inversion_v1,
+            )
+            manifest_path = bundle_dir / "bundle_manifest.json"
+            manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+            if args.signing_key:
+                sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+                ok_sig, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                    manifest_path,
+                    sig_path,
+                    args.pub,
+                )
+                if not ok_sig:
+                    errors.extend(sig_errors)
+
+        summary = {
+            "ok": ok,
+            "bundle_path": str(bundle_dir),
+            "bundle_id": manifest.get("bundle_id"),
+            "errors": list(errors),
+            "denied_reason": None if ok else "refusal",
+        }
+        print(_canonical_json(summary))
+        return 0
+    except HplError as exc:
+        summary = {"ok": False, "errors": [str(exc)], "bundle_path": None, "bundle_id": None}
+        print(_canonical_json(summary))
+        return 0
+
+
+def _cmd_demo_net_shadow(args: argparse.Namespace) -> int:
+    out_dir = args.out_dir
+    work_dir = out_dir / "work"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    program_ir_path = work_dir / "program.ir.json"
+    plan_path = work_dir / "plan.json"
+    runtime_path = work_dir / "runtime.json"
+
+    bundle_module = _load_bundle_module()
+    errors: List[str] = []
+
+    try:
+        program = parse_file(str(args.input))
+        expanded = expand_program(program)
+        validate_program(expanded)
+        program_ir = emit_program_ir(expanded, program_id=args.input.stem)
+        _write_json(program_ir_path, program_ir)
+
+        net_policy = {
+            "net_mode": "dry_run",
+            "net_caps": [
+                "NET_CONNECT",
+                "NET_HANDSHAKE",
+                "NET_KEY_EXCHANGE",
+                "NET_SEND",
+                "NET_RECV",
+                "NET_CLOSE",
+            ],
+            "net_endpoints_allowlist": [args.endpoint],
+            "net_budget_calls": 8,
+            "net_timeout_ms": args.net_timeout_ms,
+            "net_nonce_policy": "HPL_DETERMINISTIC_NONCE_V1",
+            "net_redaction_policy_id": "R1",
+            "net_crypto_policy_id": "QKX1",
+        }
+        message = {"kind": "text", "payload": args.message}
+        ctx = SchedulerContext(
+            require_epoch_verification=args.require_epoch,
+            anchor_path=args.anchor,
+            signature_path=args.sig,
+            public_key_path=args.pub,
+            allowed_backends=_parse_backends(args.allowed_backends),
+            budget_steps=args.budget_steps,
+            emit_effect_steps=True,
+            track="net_shadow",
+            net_policy=net_policy,
+            net_endpoint=args.endpoint,
+            net_message=message,
+        )
+        plan_obj = plan_program(program_ir, ctx)
+        plan_dict = plan_obj.to_dict()
+        _write_json(plan_path, plan_dict)
+
+        plan_ok = plan_obj.status == "planned"
+        if not plan_ok:
+            errors.extend(plan_obj.reasons)
+
+        token_dict = plan_dict.get("execution_token")
+        execution_token = ExecutionToken.from_dict(token_dict) if isinstance(token_dict, dict) else None
+        runtime_ctx = RuntimeContext(
+            epoch_anchor_path=args.anchor,
+            epoch_sig_path=args.sig,
+            ci_pubkey_path=args.pub,
+            execution_token=execution_token,
+            io_enabled=getattr(args, "enable_io", False),
+            net_enabled=getattr(args, "enable_net", False),
+            trace_sink=work_dir,
+        )
+        allowed_steps = {
+            str(step.get("step_id"))
+            for step in plan_dict.get("steps", [])
+            if isinstance(step, dict) and step.get("step_id")
+        }
+        contract = ExecutionContract(allowed_steps=allowed_steps)
+        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        runtime_dict = runtime_result.to_dict()
+        _write_json(runtime_path, runtime_dict)
+
+        run_ok = runtime_result.status == "completed"
+        if runtime_result.reasons:
+            errors.extend(runtime_result.reasons)
+
+        artifacts = [
+            bundle_module._artifact("program_ir", program_ir_path),
+            bundle_module._artifact("plan", plan_path),
+            bundle_module._artifact("runtime_result", runtime_path),
+        ]
+
+        net_role_paths = [
+            ("net_request_log", work_dir / "net_connect_request.json"),
+            ("net_response_log", work_dir / "net_connect_response.json"),
+            ("net_event_log", work_dir / "net_connect_event.json"),
+            ("net_request_log", work_dir / "net_handshake_request.json"),
+            ("net_response_log", work_dir / "net_handshake_response.json"),
+            ("net_event_log", work_dir / "net_handshake_event.json"),
+            ("net_request_log", work_dir / "net_key_exchange_request.json"),
+            ("net_response_log", work_dir / "net_key_exchange_response.json"),
+            ("net_event_log", work_dir / "net_key_exchange_event.json"),
+            ("net_request_log", work_dir / "net_send_request.json"),
+            ("net_response_log", work_dir / "net_send_response.json"),
+            ("net_event_log", work_dir / "net_send_event.json"),
+            ("net_request_log", work_dir / "net_recv_request.json"),
+            ("net_response_log", work_dir / "net_recv_response.json"),
+            ("net_event_log", work_dir / "net_recv_event.json"),
+            ("net_request_log", work_dir / "net_close_request.json"),
+            ("net_response_log", work_dir / "net_close_response.json"),
+            ("net_event_log", work_dir / "net_close_event.json"),
+            ("net_session_manifest", work_dir / "net_session_manifest.json"),
+        ]
+        for role, path in net_role_paths:
+            if path.exists():
+                artifacts.append(bundle_module._artifact(role, path))
+
+        if token_dict:
+            token_path = work_dir / "execution_token.json"
+            _write_json(token_path, token_dict)
+            artifacts.append(bundle_module._artifact("execution_token", token_path))
+
+        from .runtime.redaction import scan_artifacts
+
+        redaction_report = scan_artifacts([artifact.source for artifact in artifacts])
+        redaction_path = work_dir / "redaction_report.json"
+        redaction_path.write_text(_canonical_json(redaction_report), encoding="utf-8")
+        artifacts.append(bundle_module._artifact("redaction_report", redaction_path))
+
+        bundle_dir, manifest = bundle_module.build_bundle(
+            out_dir=out_dir,
+            artifacts=artifacts,
+            epoch_anchor=args.anchor if args.anchor and args.anchor.exists() else None,
+            epoch_sig=args.sig if args.sig and args.sig.exists() else None,
+            public_key=args.pub,
+            constraint_inversion_v1=args.constraint_inversion_v1,
+        )
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        manifest_path.write_text(bundle_module._canonical_json(manifest), encoding="utf-8")
+
+        if not args.signing_key:
+            errors.append("signing_key required for net-shadow demo")
+        else:
+            sig_path = bundle_module.sign_bundle_manifest(manifest_path, args.signing_key)
+            ok_sig, sig_errors = bundle_module.verify_bundle_manifest_signature(
+                manifest_path,
+                sig_path,
+                args.pub,
+            )
+            if not ok_sig:
+                errors.extend(sig_errors)
+
+        ok = plan_ok and run_ok and not errors
+        constraint_witness = None
+        dual_proposal = None
+        if not ok:
+            constraint_witness = build_constraint_witness(
+                stage="net_shadow_refusal",
                 refusal_reasons=errors,
                 artifact_digests={"plan": _digest_text(_canonical_json(plan_dict))},
                 observer_id="papas",

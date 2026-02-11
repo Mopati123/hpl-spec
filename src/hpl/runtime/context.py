@@ -27,3 +27,4 @@ class RuntimeContext:
     requested_backend: Optional[str] = None
     io_enabled: bool = False
     constraint_inversion_v1: bool = False
+    net_enabled: bool = False

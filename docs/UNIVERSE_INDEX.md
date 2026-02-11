@@ -13,7 +13,7 @@
 - `infra_H`: packaging, versioning, CI/CD intent (spec-only)
 - `data_H`: fixtures, corpora, recorded traces (spec-only)
 
-**Important constraint:** This repo contains no executable implementation code yet.
+**Important constraint:** `_H` folders contain spec-only materials; governed runtime lives under `src/hpl`.
 
 ## Governance Specs (Normative)
 
@@ -96,6 +96,7 @@ conformance, certification, and intake artifacts.
 - Navier–Stokes Runbook: docs/publish/navier_stokes_runbook.md
 - ΔS Kernel Runbook: docs/publish/delta_s_kernel_runbook.md
 - IO Lane Runbook: docs/publish/io_lane_runbook.md
+- NET Lane Runbook: docs/publish/net_lane_runbook.md
 - Phase-1 Anchor Runbook: docs/publish/phase1_anchor_runbook.md
 - HPL Public Capability Statement: docs/publish/hpl_public_capability_statement.md
 - HPL Technical Spec Summary: docs/publish/hpl_technical_spec_summary.md

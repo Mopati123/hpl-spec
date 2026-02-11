@@ -44,6 +44,9 @@ class ExecutionContract:
         io_scope = requires.get("io_scope") if isinstance(requires, dict) else None
         io_scopes = requires.get("io_scopes") if isinstance(requires, dict) else None
         io_endpoint = requires.get("io_endpoint") if isinstance(requires, dict) else None
+        net_cap = requires.get("net_cap") if isinstance(requires, dict) else None
+        net_caps = requires.get("net_caps") if isinstance(requires, dict) else None
+        net_endpoint = requires.get("net_endpoint") if isinstance(requires, dict) else None
         required_scopes: List[str] = []
         if isinstance(io_scope, str):
             required_scopes.append(io_scope)
@@ -68,6 +71,30 @@ class ExecutionContract:
                 }
                 if io_endpoint and allowed_endpoints and str(io_endpoint) not in allowed_endpoints:
                     errors.append("EndpointNotAllowed")
+        required_net_caps: List[str] = []
+        if isinstance(net_cap, str):
+            required_net_caps.append(net_cap)
+        if isinstance(net_caps, list):
+            required_net_caps.extend([str(item) for item in net_caps])
+        if required_net_caps or net_endpoint:
+            if token is None or token.net_policy is None:
+                errors.append("NetPermissionDenied")
+            else:
+                allowed_caps = {
+                    str(item).upper()
+                    for item in token.net_policy.get("net_caps", [])
+                    if str(item).strip()
+                }
+                for cap in required_net_caps:
+                    if cap.upper() not in allowed_caps:
+                        errors.append(f"NetPermissionDenied:{cap}")
+                allowed_endpoints = {
+                    str(item)
+                    for item in token.net_policy.get("net_endpoints_allowlist", [])
+                    if str(item).strip()
+                }
+                if net_endpoint and allowed_endpoints and str(net_endpoint) not in allowed_endpoints:
+                    errors.append("NetEndpointNotAllowed")
         return not errors, errors
 
     def postconditions(self, step: Dict[str, object], ctx: RuntimeContext) -> Tuple[bool, List[str]]:

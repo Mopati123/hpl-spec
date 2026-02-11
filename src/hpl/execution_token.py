@@ -60,6 +60,34 @@ def _normalize_io_policy(io_policy: Optional[Dict[str, object]]) -> Optional[Dic
     return normalized
 
 
+def _normalize_net_policy(net_policy: Optional[Dict[str, object]]) -> Optional[Dict[str, object]]:
+    if not isinstance(net_policy, dict):
+        return None
+    net_mode = str(net_policy.get("net_mode", "dry_run")).lower()
+    if net_mode not in {"dry_run", "live"}:
+        net_mode = "dry_run"
+    net_caps = _normalize_modes(net_policy.get("net_caps", []) if isinstance(net_policy.get("net_caps"), list) else [])
+    endpoints = net_policy.get("net_endpoints_allowlist", []) if isinstance(net_policy.get("net_endpoints_allowlist"), list) else []
+    net_endpoints_allowlist = sorted({str(item).strip() for item in endpoints if str(item).strip()})
+    net_budget_calls = int(net_policy.get("net_budget_calls")) if "net_budget_calls" in net_policy else None
+    net_timeout_ms = int(net_policy.get("net_timeout_ms", 2500))
+    net_nonce_policy = str(net_policy.get("net_nonce_policy", "HPL_DETERMINISTIC_NONCE_V1"))
+    net_redaction_policy_id = str(net_policy.get("net_redaction_policy_id", "R1"))
+    net_crypto_policy_id = str(net_policy.get("net_crypto_policy_id", "QKX1"))
+    normalized: Dict[str, object] = {
+        "net_mode": net_mode,
+        "net_caps": net_caps,
+        "net_endpoints_allowlist": net_endpoints_allowlist,
+        "net_timeout_ms": net_timeout_ms,
+        "net_nonce_policy": net_nonce_policy,
+        "net_redaction_policy_id": net_redaction_policy_id,
+        "net_crypto_policy_id": net_crypto_policy_id,
+    }
+    if net_budget_calls is not None:
+        normalized["net_budget_calls"] = net_budget_calls
+    return normalized
+
+
 @dataclass(frozen=True)
 class ExecutionToken:
     token_id: str
@@ -68,6 +96,7 @@ class ExecutionToken:
     budget_steps: int
     determinism_mode: str
     io_policy: Optional[Dict[str, object]] = None
+    net_policy: Optional[Dict[str, object]] = None
     delta_s_policy: Optional[Dict[str, object]] = None
     delta_s_budget: int = 0
     measurement_modes_allowed: Optional[List[str]] = None
@@ -84,6 +113,8 @@ class ExecutionToken:
         }
         if self.io_policy is not None:
             data["io_policy"] = dict(self.io_policy)
+        if self.net_policy is not None:
+            data["net_policy"] = dict(self.net_policy)
         if self.delta_s_policy is not None:
             data["delta_s_policy"] = dict(self.delta_s_policy)
         if self.delta_s_budget:
@@ -104,6 +135,7 @@ class ExecutionToken:
         budget_steps: int = 100,
         determinism_mode: str = "deterministic",
         io_policy: Optional[Dict[str, object]] = None,
+        net_policy: Optional[Dict[str, object]] = None,
         delta_s_policy: Optional[Dict[str, object]] = None,
         delta_s_budget: int = 0,
         measurement_modes_allowed: Optional[List[str]] = None,
@@ -114,12 +146,14 @@ class ExecutionToken:
         preferred = preferred_backend.upper() if preferred_backend else None
         modes = _normalize_modes(measurement_modes_allowed or [])
         normalized_io_policy = _normalize_io_policy(io_policy)
+        normalized_net_policy = _normalize_net_policy(net_policy)
         core = {
             "allowed_backends": allowed,
             "preferred_backend": preferred,
             "budget_steps": int(budget_steps),
             "determinism_mode": determinism_mode,
             "io_policy": normalized_io_policy,
+            "net_policy": normalized_net_policy,
             "delta_s_policy": delta_s_policy or {},
             "delta_s_budget": int(delta_s_budget),
             "measurement_modes_allowed": modes,
@@ -133,6 +167,7 @@ class ExecutionToken:
             budget_steps=int(budget_steps),
             determinism_mode=determinism_mode,
             io_policy=normalized_io_policy,
+            net_policy=normalized_net_policy,
             delta_s_policy=dict(delta_s_policy) if isinstance(delta_s_policy, dict) else None,
             delta_s_budget=int(delta_s_budget),
             measurement_modes_allowed=modes if modes else None,
@@ -149,6 +184,7 @@ class ExecutionToken:
         budget_steps = int(data.get("budget_steps", 100))
         determinism_mode = str(data.get("determinism_mode", "deterministic"))
         io_policy = _normalize_io_policy(data.get("io_policy"))
+        net_policy = _normalize_net_policy(data.get("net_policy"))
         delta_s_policy = data.get("delta_s_policy")
         if not isinstance(delta_s_policy, dict):
             delta_s_policy = None
@@ -166,6 +202,7 @@ class ExecutionToken:
                 budget_steps=budget_steps,
                 determinism_mode=determinism_mode,
                 io_policy=io_policy,
+                net_policy=net_policy,
                 delta_s_policy=delta_s_policy if isinstance(delta_s_policy, dict) else None,
                 delta_s_budget=delta_s_budget,
                 measurement_modes_allowed=list(measurement_modes_allowed),
@@ -179,6 +216,7 @@ class ExecutionToken:
             budget_steps=budget_steps,
             determinism_mode=determinism_mode,
             io_policy=io_policy,
+            net_policy=net_policy,
             delta_s_policy=dict(delta_s_policy) if isinstance(delta_s_policy, dict) else None,
             delta_s_budget=delta_s_budget,
             measurement_modes_allowed=_normalize_modes(list(measurement_modes_allowed)) if measurement_modes_allowed else None,

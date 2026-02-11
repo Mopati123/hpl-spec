@@ -35,6 +35,7 @@ class SchedulerContext:
     budget_steps: int = 100
     determinism_mode: str = "deterministic"
     io_policy: Optional[Dict[str, object]] = None
+    net_policy: Optional[Dict[str, object]] = None
     delta_s_policy: Optional[Dict[str, object]] = None
     delta_s_budget: int = 0
     measurement_modes_allowed: Optional[List[str]] = None
@@ -60,6 +61,8 @@ class SchedulerContext:
     io_endpoint: Optional[str] = None
     io_order: Optional[Dict[str, object]] = None
     io_query_params: Optional[Dict[str, object]] = None
+    net_endpoint: Optional[str] = None
+    net_message: Optional[Dict[str, object]] = None
     ns_state_path: Optional[Path] = None
     ns_policy_path: Optional[Path] = None
     ns_state_final_path: Optional[Path] = None
@@ -109,6 +112,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         budget_steps=ctx.budget_steps,
         determinism_mode=ctx.determinism_mode,
         io_policy=ctx.io_policy,
+        net_policy=ctx.net_policy,
         delta_s_policy=ctx.delta_s_policy,
         delta_s_budget=ctx.delta_s_budget,
         measurement_modes_allowed=ctx.measurement_modes_allowed,
@@ -228,6 +232,8 @@ def _build_effect_steps(program_ir: Dict[str, object], ctx: SchedulerContext) ->
         return _build_trading_io_live_min_steps(program_ir, ctx)
     if ctx.track == "navier_stokes":
         return _build_navier_stokes_steps(program_ir, ctx)
+    if ctx.track == "net_shadow":
+        return _build_net_shadow_steps(program_ir, ctx)
 
     if ctx.ecmo_input_path:
         selection_args: Dict[str, object] = {"input_path": str(ctx.ecmo_input_path)}
@@ -905,6 +911,61 @@ def _build_trading_io_live_min_steps(program_ir: Dict[str, object], ctx: Schedul
         }
     )
 
+    return steps
+
+
+def _build_net_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerContext) -> List[Dict[str, object]]:
+    endpoint = ctx.net_endpoint or "net://demo"
+    message = ctx.net_message or {"kind": "ping", "payload": "hello"}
+    steps: List[Dict[str, object]] = []
+    steps.append(
+        {
+            "step_id": "net_connect",
+            "effect_type": "NET_CONNECT",
+            "args": {"endpoint": endpoint},
+            "requires": {"net_cap": "NET_CONNECT", "net_endpoint": endpoint},
+        }
+    )
+    steps.append(
+        {
+            "step_id": "net_handshake",
+            "effect_type": "NET_HANDSHAKE",
+            "args": {"endpoint": endpoint},
+            "requires": {"net_cap": "NET_HANDSHAKE", "net_endpoint": endpoint},
+        }
+    )
+    steps.append(
+        {
+            "step_id": "net_key_exchange",
+            "effect_type": "NET_KEY_EXCHANGE",
+            "args": {"endpoint": endpoint},
+            "requires": {"net_cap": "NET_KEY_EXCHANGE", "net_endpoint": endpoint},
+        }
+    )
+    steps.append(
+        {
+            "step_id": "net_send",
+            "effect_type": "NET_SEND",
+            "args": {"endpoint": endpoint, "payload": message},
+            "requires": {"net_cap": "NET_SEND", "net_endpoint": endpoint},
+        }
+    )
+    steps.append(
+        {
+            "step_id": "net_recv",
+            "effect_type": "NET_RECV",
+            "args": {"endpoint": endpoint},
+            "requires": {"net_cap": "NET_RECV", "net_endpoint": endpoint},
+        }
+    )
+    steps.append(
+        {
+            "step_id": "net_close",
+            "effect_type": "NET_CLOSE",
+            "args": {"endpoint": endpoint},
+            "requires": {"net_cap": "NET_CLOSE", "net_endpoint": endpoint},
+        }
+    )
     return steps
 
 
