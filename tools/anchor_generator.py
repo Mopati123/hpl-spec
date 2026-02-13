@@ -35,6 +35,7 @@ class AnchorInputs:
 
 def main() -> int:
     args = _parse_args()
+    git_commit = _resolve_required_git_commit(args.git_commit, args.repo_root)
     inputs = AnchorInputs(
         bundle_dir=args.bundle_dir.resolve(),
         out_dir=(args.out_dir or args.bundle_dir).resolve(),
@@ -42,7 +43,7 @@ def main() -> int:
         leaves_name=args.leaves_name,
         signature_name=args.signature_name,
         repo=args.repo,
-        git_commit=args.git_commit or _read_git_commit(args.repo_root),
+        git_commit=git_commit,
         challenge_window_mode=args.challenge_window_mode,
         challenge_window_value=str(args.challenge_window_value),
         challenge_window_chain=args.challenge_window_chain,
@@ -254,7 +255,9 @@ def _read_hex(path: Optional[Path]) -> Optional[str]:
 def _read_git_commit(repo_root: Optional[Path]) -> Optional[str]:
     if repo_root is None:
         return None
-    git_dir = repo_root / ".git"
+    git_dir = _resolve_git_dir(repo_root)
+    if git_dir is None:
+        return None
     head_path = git_dir / "HEAD"
     if not head_path.exists():
         return None
@@ -269,11 +272,44 @@ def _read_git_commit(repo_root: Optional[Path]) -> Optional[str]:
             for line in packed.read_text(encoding="utf-8").splitlines():
                 if line.startswith("#") or line.startswith("^"):
                     continue
+                if " " not in line:
+                    continue
                 sha, ref_name = line.split(" ", 1)
                 if ref_name.strip() == ref:
                     return sha.strip()
         return None
     return head or None
+
+
+def _resolve_required_git_commit(explicit: Optional[str], repo_root: Optional[Path]) -> str:
+    if explicit:
+        return explicit
+    commit = _read_git_commit(repo_root)
+    if commit:
+        return commit
+    raise ValueError("unable to determine git_commit; provide --git-commit")
+
+
+def _resolve_git_dir(repo_root: Path) -> Optional[Path]:
+    git_entry = repo_root / ".git"
+    if git_entry.is_dir():
+        return git_entry
+    if not git_entry.is_file():
+        return None
+
+    lines = git_entry.read_text(encoding="utf-8").splitlines()
+    first_line = lines[0].strip() if lines else ""
+    prefix = "gitdir:"
+    if not first_line.lower().startswith(prefix):
+        return None
+    gitdir_value = first_line[len(prefix) :].strip()
+    if not gitdir_value:
+        return None
+
+    git_dir = Path(gitdir_value)
+    if not git_dir.is_absolute():
+        git_dir = (repo_root / git_dir).resolve()
+    return git_dir
 
 
 def _parse_args() -> argparse.Namespace:
