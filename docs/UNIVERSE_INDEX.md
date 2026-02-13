@@ -72,6 +72,7 @@ conformance, certification, and intake artifacts.
 
 ## Audit & Evidence
 
+- Reproducibility Contract: `docs/audit/reproducibility_contract.md`
 - L2-C diagnostics test run: `docs/audit/level2_diagnostics_test_run_2026-01-16.md`
 - Level-2 tooling completion: `docs/audit/level2_tooling_completion_2026-01-16.md`
 - Repo file manifest snapshot (SHA 6cf610308346a304b86b6f88e0aff423c16d503e): `docs/audit/hpl_full_file_manifest_2026-01-27.md`
