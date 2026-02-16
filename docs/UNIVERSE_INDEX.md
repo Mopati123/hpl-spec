@@ -102,6 +102,7 @@ conformance, certification, and intake artifacts.
 - HPL Public Capability Statement: docs/publish/hpl_public_capability_statement.md
 - HPL Technical Spec Summary: docs/publish/hpl_technical_spec_summary.md
 - HPL Capability Matrix: docs/publish/hpl_capability_matrix.md
+- Repo Root Architecture and File Manifest: docs/publish/repo_root_architecture.md
 
 
 
