@@ -1,8 +1,9 @@
 # HPL Public Capability Statement
 
 Version: Phase-1 (public)  
-Main SHA: ccac2e45490612d8f4ef69edaf4104b0a90ff8f4  
-Date: 2026-02-10
+Validation baseline SHA: d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf  
+Current tip command: `git rev-parse HEAD`  
+Date: 2026-02-16
 
 ## Executive Summary
 Hamiltonian Programming Language (HPL) is a governance-native execution platform.
@@ -13,11 +14,11 @@ HPL provides:
 - tokenized execution authority (no ambient execution),
 - refusal-first outcomes with evidence,
 - deterministic evidence bundles with signatures,
-- a governed IO lane with reconcile/rollback,
+- governed IO and NET lanes,
 - Phase-1 anchoring (Merkle root + signature + verification),
 - formal observer/witness outputs (Papas) with zero collapse authority.
 
-This is a production-grade execution sovereignty substrate, not a best-effort runtime.
+This is a governed execution substrate, not a best-effort runtime.
 
 ---
 
@@ -31,28 +32,37 @@ This is a production-grade execution sovereignty substrate, not a best-effort ru
 ### 2) Determinism
 - Canonical JSON serialization for hashed artifacts.
 - Stable identifiers (bundle_id, witness_id, delta_s IDs).
-- Evidence bundling is deterministic and verifiable.
+- Evidence bundling and anchor generation are deterministic and verifiable.
 
-### 3) Evidence & Non-Repudiation
+### 3) Evidence and Non-Repudiation
 - Evidence bundles are role-complete and signed (Ed25519).
-- Signature verification is required by policy in CI lanes.
+- Signature verification is policy-gated in CI and demo lanes.
 - Redaction gate prevents secrets from entering bundles.
 
 ### 4) Governed IO Lane
 - IO requires a three-gate turn:
-  - CLI opt-in (--enable-io),
-  - environment opt-in (HPL_IO_ENABLED=1),
-  - adapter readiness (HPL_IO_ADAPTER_READY=1).
+  - CLI opt-in (`--enable-io`),
+  - environment opt-in (`HPL_IO_ENABLED=1`),
+  - adapter readiness (`HPL_IO_ADAPTER_READY=1`).
 - IO is token-scoped (scopes, endpoint allowlist, call budgets).
 - IO outcomes are reconciled and rollback is explicit.
 - Bundles refuse if IO roles are incomplete.
 
-### 5) Measurement / Delta-S Gate
-- Irreversible steps can be policy-gated by admissibility + Delta-S evidence.
-- Delta-S artifacts are evidence roles, signed and verifiable.
+### 5) Governed NET Lane
+- NET requires a three-gate turn:
+  - CLI opt-in (`--enable-net`),
+  - environment opt-in (`HPL_NET_ENABLED=1`),
+  - adapter readiness (`HPL_NET_ADAPTER_READY=1`).
+- NET actions are token-scoped (caps, endpoint allowlist, budgets).
+- Stabilizer gating enforces deferred-collapse behavior.
+- Bundles refuse if NET roles are incomplete.
 
-### 6) Phase-1 Anchoring
-- Evidence bundles can be converted into a Merkle root + signed anchor.
+### 6) Measurement / Delta-S Gate
+- Irreversible steps can be policy-gated by admissibility + Delta-S evidence.
+- Delta-S artifacts are signed/verifiable evidence roles.
+
+### 7) Phase-1 Anchoring
+- Evidence bundles can be converted into a deterministic Merkle root + signed anchor.
 - Independent verification is supported by tooling.
 
 ---
@@ -60,15 +70,15 @@ This is a production-grade execution sovereignty substrate, not a best-effort ru
 ## What HPL Does Not Claim Yet
 
 - Live trading by default.
-- Unbounded external IO.
+- Unbounded external IO/NET.
 - Performance guarantees under adversarial workloads.
 - Broker access without explicit operator and token authority.
 
-These are explicitly gated and require opt-in permissions and policy.
+These behaviors are explicitly gated and require opt-in permissions and policy.
 
 ---
 
-## What HPL Can Do Now (Practical Capabilities)
+## Practical Capabilities
 
 ### Regulated Automation
 Produce verifiable execution proofs that include:
@@ -85,7 +95,6 @@ Supported ladder:
 - expansion only after reproducibility proof.
 
 ### Agent Governance
-
 Agents can propose indefinitely but cannot execute without:
 - token authority,
 - admissibility/Delta-S (if required),
@@ -113,17 +122,18 @@ This provides external, cryptographically verifiable evidence of execution.
 Papas is a first-class observer with zero collapse authority:
 - emits deterministic observer reports,
 - produces DualProposal when enabled,
-- cannot mint tokens or authorize IO.
+- cannot mint tokens or authorize IO/NET.
 
 Papas serves as an audit witness and lawful explanation generator, not an executor.
 
 ---
 
 ## Production Status (Public Truth)
-Main SHA: ccac2e45490612d8f4ef69edaf4104b0a90ff8f4
+Validation baseline SHA: d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf
 
 Public main includes:
-- full P4 IO lane (C1–C3 tightening),
+- full P4 IO lane (C1-C3 tightening),
+- NET lane governance and stabilizer gating,
 - Phase-1 anchor generator + verifier,
 - operator registry enforcement,
 - Papas observer reports.
@@ -132,11 +142,11 @@ Public main includes:
 
 ## Next Proof Milestones
 Recommended order:
-1) Multi-machine reproducibility proof (same merkle_root across machines).
+1) Multi-machine reproducibility proof (same merkle_root under matching contract state).
 2) Anchor IO shadow run (IO lane + anchoring combined).
-3) Publish Phase-1 proof bundle as an external certificate.
+3) Anchor NET shadow run (NET lane + anchoring combined).
 
 ---
 
 ## Contact
-For verification or audit requests, provide the bundle + anchor manifest and the verification tools in this repo.
+For verification or audit requests, provide the evidence bundle + anchor manifest + verifier outputs.

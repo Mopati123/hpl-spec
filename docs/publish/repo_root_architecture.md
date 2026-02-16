@@ -1,7 +1,8 @@
 # Repository Root Architecture and File Manifest
 
-Main SHA: `8a7925547d403521db5e7db6d34600314ad642de`
-Tracked files: `331`
+Validation baseline SHA: `d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf`
+Current tip command: `git rev-parse HEAD`
+Tracked files: `332`
 
 ## Top-Level Summary
 
@@ -19,7 +20,7 @@ Tracked files: `331`
   - `backends_H/`: 4 files
   - `config/`: 2 files
   - `data_H/`: 4 files
-  - `docs/`: 97 files
+  - `docs/`: 98 files
   - `dynamics_H/`: 7 files
   - `emergence_H/`: 4 files
   - `examples/`: 1 files
@@ -131,6 +132,7 @@ Tracked files: `331`
 |   |   |-- phase1_anchor_runbook.md
 |   |   |-- production_readiness_checklist.md
 |   |   |-- quickstart_install_run.md
+|   |   |-- repo_root_architecture.md
 |   |   |-- trading_paper_mode_runbook.md
 |   |   `-- trading_shadow_mode_runbook.md
 |   |-- spec/
@@ -518,6 +520,7 @@ docs/publish/net_lane_runbook.md
 docs/publish/phase1_anchor_runbook.md
 docs/publish/production_readiness_checklist.md
 docs/publish/quickstart_install_run.md
+docs/publish/repo_root_architecture.md
 docs/publish/trading_paper_mode_runbook.md
 docs/publish/trading_shadow_mode_runbook.md
 docs/spec/00_spec_freeze_declaration_v1.md
@@ -775,3 +778,13 @@ tools_H/docs/coupling_topology_validation.md
 tools_H/docs/tech_stack_validator_rules.md
 tools_H/manifests/.keep
 ```
+
+## Regeneration
+
+Regenerate this manifest from tracked files with:
+
+```bash
+git ls-files
+```
+
+The file is a tracked-files snapshot and should be refreshed when repository structure changes.

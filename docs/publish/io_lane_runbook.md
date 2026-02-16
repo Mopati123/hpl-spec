@@ -82,29 +82,37 @@ Bundles are signed and verifiable (manifest signature).
 
 ## 7) Verification Steps
 
-**Local verification**
+**Bundle signing + verification (at bundle creation time)**
 ```
-python tools/verify_bundle_signature.py --bundle <bundle_dir> --pub config/keys/ci_ed25519.pub
+python tools/bundle_evidence.py \
+  --out-dir <bundle_out_dir> \
+  --plan <plan.json> \
+  --runtime-result <runtime_result.json> \
+  --execution-token <execution_token.json> \
+  --sign-bundle \
+  --signing-key <signing_key.sk> \
+  --verify-bundle \
+  --pub config/keys/ci_ed25519.pub
 ```
 
-**Bundle content check**
+**Anchor verification (post-bundle)**
 ```
-python tools/bundle_evidence.py --bundle <bundle_dir> --verify-bundle
+python tools/verify_anchor.py <bundle_dir> <anchor_manifest.json> --public-key config/keys/ci_ed25519.pub
 ```
 
 **CI artifacts**
-- CI uploads signed bundles as workflow artifacts (when Actions runs).
+- CI uploads signed bundles and anchors as workflow artifacts (when Actions runs).
 
 ## 8) Example Commands (Mock IO)
 
-```
+```powershell
 # Enable IO lane locally (mock adapter)
-set HPL_IO_ENABLED=1
-set HPL_IO_ADAPTER_READY=1
-set HPL_IO_ADAPTER=mt5
+$env:HPL_IO_ENABLED = "1"
+$env:HPL_IO_ADAPTER_READY = "1"
+$env:HPL_IO_ADAPTER = "mock"
 
-# Run a lifecycle or demo that includes IO effects
-hpl lifecycle <input.hpl> --enable-io --out-dir out
+# Run lifecycle with explicit backend + IO gate
+hpl lifecycle examples/momentum_trade.hpl --backend classical --out-dir out --enable-io
 ```
 
 If any gate is missing, the run **refuses** with typed evidence, and no IO artifacts

@@ -2,7 +2,8 @@
 
 HPL is a governed execution substrate: a canonical specification plus a reference runtime kernel that executes only under explicit authority, emits deterministic evidence, and supports cryptographic anchoring.
 
-Main SHA: `8a7925547d403521db5e7db6d34600314ad642de`
+Validation baseline SHA: `d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf`
+Current tip command: `git rev-parse HEAD`
 
 ## What This Software Does
 

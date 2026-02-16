@@ -1,15 +1,16 @@
 # HPL Technical Spec Summary (Public)
 
-Main SHA: ccac2e45490612d8f4ef69edaf4104b0a90ff8f4  
-Date: 2026-02-10
+Validation baseline SHA: d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf  
+Current tip command: `git rev-parse HEAD`  
+Date: 2026-02-16
 
-This summary is tied to the current main commit and lists only implemented behavior.
+This summary reflects implemented behavior at the validation baseline SHA.
 
 ---
 
 ## 1) Core Pipeline
 
-parse → expand → validate → ProgramIR → ExecutionPlan → Runtime (ESK) → Bundle → Signature → Anchor
+parse -> expand -> validate -> ProgramIR -> ExecutionPlan -> Runtime (ESK) -> Bundle -> Signature -> Anchor
 
 - ProgramIR is deterministic.
 - Scheduler issues ExecutionPlan + ExecutionToken.
@@ -26,6 +27,7 @@ Token fields are deterministic and normalized:
 - budget_steps
 - determinism_mode
 - io_policy
+- net_policy
 - delta_s_policy
 - delta_s_budget
 - measurement_modes_allowed
@@ -43,6 +45,16 @@ Token fields are deterministic and normalized:
 - io_nonce_policy (string)
 - io_redaction_policy_id (string)
 
+### net_policy (normalized)
+- net_mode (dry_run | live)
+- net_caps (list)
+- net_endpoints_allowlist (list)
+- net_budget_calls (optional int)
+- net_timeout_ms (int)
+- net_nonce_policy (string)
+- net_redaction_policy_id (string)
+- net_crypto_policy_id (string)
+
 ---
 
 ## 3) Runtime Semantics (ESK)
@@ -53,6 +65,7 @@ Runtime guarantees:
 - deterministic transcript,
 - step budget enforcement,
 - IO budget enforcement,
+- NET budget enforcement,
 - Delta-S budget enforcement (when configured).
 
 ---
@@ -91,17 +104,39 @@ Adapters:
 
 ---
 
-## 6) Evidence Bundling
+## 6) NET Lane (Governed Sub-Universe)
+
+Three-gate enablement:
+- CLI: --enable-net
+- ENV: HPL_NET_ENABLED=1
+- Adapter readiness: HPL_NET_ADAPTER_READY=1
+
+Handler safeguards:
+- token cap check
+- endpoint allowlist
+- net_budget_calls
+- stabilizer gate
+- deterministic timeout/refusal semantics
+- redaction-safe artifacts
+
+Adapters:
+- Mock (default)
+- Local loopback (guarded)
+- WebSocket (guarded)
+
+---
+
+## 7) Evidence Bundling
 
 Bundles are role-complete and signed:
 - bundle_manifest.json
-- role-based artifacts (token, IO, Delta-S, witness, etc.)
+- role-based artifacts (token, IO, NET, Delta-S, witness, etc.)
 - signature + verification enforced
 - refusal on missing required roles
 
 ---
 
-## 7) Phase-1 Anchoring
+## 8) Phase-1 Anchoring
 
 Tools:
 - tools/anchor_generator.py
@@ -116,16 +151,16 @@ Root is deterministic for identical inputs and verified independently.
 
 ---
 
-## 8) Operator Registry Enforcement
+## 9) Operator Registry Enforcement
 
 Registry loader:
-- enforces META ↔ registry bijection
+- enforces META <-> registry bijection
 - plan-time hard fail when enforcement enabled
 - runtime re-validation as defense in depth
 
 ---
 
-## 9) Observer/Witness (Papas)
+## 10) Observer/Witness (Papas)
 
 Papas emits deterministic observer reports on refusal:
 - summary + refusal reasons
@@ -134,36 +169,43 @@ Papas emits deterministic observer reports on refusal:
 
 ---
 
-## 10) Current Domain Packs
+## 11) Current Domain Packs
 
 - CI governance demo
 - Agent governance demo
 - Trading paper-mode
 - Trading shadow-mode
 - Trading IO shadow / live-min demos
-- Navier–Stokes demo
+- Navier-Stokes demo
+- NET shadow demo
 
 ---
 
-## 11) Public Claims (Scope)
+## 12) Public Claims (Scope)
 
 Supported:
 - governed execution with refusal-first semantics
 - deterministic evidence bundles with signatures
 - IO lane with reconciliation/rollback and redaction guard
+- NET lane with stabilizer gating and deterministic evidence
 - Phase-1 anchoring and independent verification
 
 Not claimed:
 - live trading by default
-- unbounded external IO
+- unbounded external IO/NET
 - performance guarantees under adversarial conditions
 
 ---
 
-## 12) Reproducibility Targets
+## 13) Reproducibility Targets
 
 Phase-1 proof requires:
 - identical merkle_root across machines for identical inputs
 - verify_anchor.py returns ok: true
 
-If bundle_id diverges due to path normalization, merkle_root is the canonical truth.
+Contract-state fields must match before merkle comparison:
+- git_commit
+- leaf_rule
+- leaf_count
+- bundle_manifest_digest
+- leaves_digest

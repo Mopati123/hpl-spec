@@ -1,7 +1,8 @@
 # HPL Capability Matrix
 
-Main SHA: d9866040e379bd453abb4035df3d233c873f89cf  
-Date: 2026-02-11
+Validation baseline SHA: d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf  
+Current tip command: `git rev-parse HEAD`  
+Date: 2026-02-16
 
 Status legend:
 - Implemented
@@ -22,7 +23,7 @@ Status legend:
 ## Governance
 - ExecutionToken authority: Implemented
 - Refusal-first semantics: Implemented
-- ?S gate (measurement closure): Implemented (gated)
+- Delta-S gate (measurement closure): Implemented (gated)
 - Operator registry enforcement: Implemented (gated)
 - Papas observer reports: Implemented (governed)
 
@@ -45,11 +46,11 @@ Status legend:
 - NET adapter contract + mock adapter: Implemented (gated)
 - Live NET by default: Out of scope
 
-## Evidence & Anchoring
+## Evidence and Anchoring
 - Role-complete bundles: Implemented
 - Bundle signing + verification: Implemented
 - Phase-1 anchor generator + verifier: Implemented
-- Multi-machine reproducibility proof: Demo-only
+- Multi-machine reproducibility proof process: Implemented (demo workflow)
 
 ## Domain Packs (Demo)
 - CI governance demo: Demo-only
@@ -57,4 +58,5 @@ Status legend:
 - Trading paper-mode: Demo-only
 - Trading shadow-mode: Demo-only
 - Trading IO shadow/live-min tracks: Demo-only (gated)
-- Navier–Stokes pack: Demo-only
+- Navier-Stokes pack: Demo-only
+- NET shadow pack: Demo-only (gated)

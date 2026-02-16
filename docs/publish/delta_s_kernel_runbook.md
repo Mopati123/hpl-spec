@@ -1,13 +1,13 @@
-# HPL ?S Kernel Runbook
+# HPL Delta-S Kernel Runbook
 
-This runbook describes the **?S kernel integration**. It makes irreversible effects lawful only when admissibility evidence and a ?S gate are present and signed. It does **not** change spec/freeze documents; it is an operational usage guide for the kernel and bundler.
+This runbook describes the **Delta-S kernel integration**. It makes irreversible effects lawful only when admissibility evidence and a Delta-S gate are present and signed. It does **not** change spec/freeze documents; it is an operational usage guide for the kernel and bundler.
 
-## What ?S Kernel Enforcement Is
+## What Delta-S Kernel Enforcement Is
 
-- A **kernel rule**: irreversible effects require admissibility + ?S evidence
-- Deterministic ?S computation from prior/posterior artifacts
+- A **kernel rule**: irreversible effects require admissibility + Delta-S evidence
+- Deterministic Delta-S computation from prior/posterior artifacts
 - Refusal-first enforcement when evidence is missing or the gate fails
-- Signed bundle roles for ?S artifacts
+- Signed bundle roles for Delta-S artifacts
 
 ## Required Artifacts
 
@@ -30,7 +30,7 @@ Optional but recommended:
 
 ## Bundle Roles Enforcement
 
-When the token requires ?S, bundling enforces roles automatically:
+When the token requires Delta-S, bundling enforces roles automatically:
 
 ```bash
 hpl bundle --out-dir out/bundle \
@@ -45,7 +45,7 @@ If any required role is missing, bundling returns `ok=false` and the manifest in
 
 ## Refusal Behavior
 
-Refusal is a lawful output. If ?S evidence is missing or the gate fails:
+Refusal is a lawful output. If Delta-S evidence is missing or the gate fails:
 
 - runtime returns `ok=false`
 - a `ConstraintWitness` is emitted
@@ -53,14 +53,14 @@ Refusal is a lawful output. If ?S evidence is missing or the gate fails:
 
 ## Determinism Checklist
 
-- ?S computed from **prior/posterior artifacts only**
+- Delta-S computed from **prior/posterior artifacts only**
 - No wall-clock timestamps in hashed content
 - Canonical JSON ordering in artifacts
-- Same inputs ? same ?S report and same bundle manifest
+- Same inputs ? same Delta-S report and same bundle manifest
 
 ## Notes on Domain Packs
 
 Domain packs may emit their own admissibility certificates (e.g., barrier checks).
-If a pack uses irreversible effects, it must also emit the ?S artifacts above.
+If a pack uses irreversible effects, it must also emit the Delta-S artifacts above.
 
 This makes **collapse authorization** provable and non-repudiable.
