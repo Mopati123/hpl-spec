@@ -19,6 +19,18 @@ def _load_json(path: Path) -> Dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _emit_input_error(missing_paths: List[str]) -> int:
+    output = {
+        "CONTRACT_MATCH": False,
+        "MERKLE_MATCH": False,
+        "ROOT_CAUSE": "missing reference/candidate anchor artifacts",
+        "NEXT_ACTION": "Provide existing manifest/leaves paths for both machines before comparison",
+        "missing_paths": missing_paths,
+    }
+    print(json.dumps(output, sort_keys=True, separators=(",", ":")))
+    return 2
+
+
 def _contract(manifest: Dict[str, object]) -> Dict[str, object]:
     return {
         "git_commit": manifest.get("git_commit"),
@@ -75,6 +87,16 @@ def main() -> int:
     parser.add_argument("--machine-b-manifest", type=Path, required=True)
     parser.add_argument("--machine-b-leaves", type=Path, required=True)
     args = parser.parse_args()
+
+    required_paths = [
+        args.machine_a_manifest,
+        args.machine_a_leaves,
+        args.machine_b_manifest,
+        args.machine_b_leaves,
+    ]
+    missing_paths = [str(path) for path in required_paths if not path.exists()]
+    if missing_paths:
+        return _emit_input_error(missing_paths)
 
     a_manifest = _load_json(args.machine_a_manifest)
     b_manifest = _load_json(args.machine_b_manifest)

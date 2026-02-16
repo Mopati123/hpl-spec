@@ -19,6 +19,16 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path ".").Path
 $env:PYTHONPATH = (Resolve-Path ".\src").Path
 
+if (($ReferenceAnchorManifest -and -not $ReferenceAnchorLeaves) -or (-not $ReferenceAnchorManifest -and $ReferenceAnchorLeaves)) {
+    throw "Provide both -ReferenceAnchorManifest and -ReferenceAnchorLeaves together."
+}
+if ($ReferenceAnchorManifest -and -not (Test-Path $ReferenceAnchorManifest)) {
+    throw "Reference anchor manifest not found: $ReferenceAnchorManifest"
+}
+if ($ReferenceAnchorLeaves -and -not (Test-Path $ReferenceAnchorLeaves)) {
+    throw "Reference anchor leaves not found: $ReferenceAnchorLeaves"
+}
+
 if ($EnableIo.IsPresent) {
     $env:HPL_IO_ENABLED = "1"
     if (-not $env:HPL_IO_ADAPTER) {
@@ -96,9 +106,6 @@ $firstDivergentLeaf = $null
 $referenceContract = $null
 
 if ($ReferenceAnchorManifest) {
-    if (-not (Test-Path $ReferenceAnchorManifest)) {
-        throw "Reference anchor manifest not found: $ReferenceAnchorManifest"
-    }
     $refManifest = Get-Content $ReferenceAnchorManifest -Raw | ConvertFrom-Json
     $referenceContract = [ordered]@{
         git_commit = "$($refManifest.git_commit)"

@@ -40,6 +40,25 @@ python tools/verify_anchor.py <bundle_dir> <bundle_dir>/anchor_manifest.json
 Verification recomputes the leaves and Merkle root from bundle contents and verifies
 the manifest signature if present.
 
+## Canonical Track A Compare (Machine B)
+
+Do not compare against ephemeral `artifacts/.../run_001` paths. Keep Machine A
+reference artifacts in a stable, versioned folder.
+
+Canonical reference folder:
+
+- `references/phase1/navier_stokes/machine_a_d878e95/anchor_manifest.json`
+- `references/phase1/navier_stokes/machine_a_d878e95/anchor_leaves.json`
+
+Run the wrapper to enforce preflight checks and compare in one command:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\phase1_track_a_verify.ps1
+```
+
+The wrapper fails fast if reference files are missing and emits a deterministic
+`CONTRACT_MATCH` / `MERKLE_MATCH` result.
+
 ## Anchor Manifest Fields (Canonical)
 
 The manifest includes:
