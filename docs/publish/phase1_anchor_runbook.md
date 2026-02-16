@@ -47,8 +47,8 @@ reference artifacts in a stable, versioned folder.
 
 Canonical reference folder:
 
-- `references/phase1/navier_stokes/machine_a_d878e95/anchor_manifest.json`
-- `references/phase1/navier_stokes/machine_a_d878e95/anchor_leaves.json`
+- `references/phase1/navier_stokes/machine_a_f06023a/anchor_manifest.json`
+- `references/phase1/navier_stokes/machine_a_f06023a/anchor_leaves.json`
 
 Run the wrapper to enforce preflight checks and compare in one command:
 
@@ -56,8 +56,15 @@ Run the wrapper to enforce preflight checks and compare in one command:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\phase1_track_a_verify.ps1
 ```
 
-The wrapper fails fast if reference files are missing and emits a deterministic
-`CONTRACT_MATCH` / `MERKLE_MATCH` result.
+The runner creates a detached worktree pinned to the reference manifest's
+`git_commit`, forces LF checkout during worktree creation, executes the demo and
+anchor generation in that worktree, and then compares contracts deterministically.
+
+It fails fast if required reference files are missing and emits:
+
+- `CONTRACT_MATCH=true|false`
+- `MERKLE_MATCH=true|false`
+- `REPORT_PATH=<.../track_a_report.json>`
 
 ## Anchor Manifest Fields (Canonical)
 

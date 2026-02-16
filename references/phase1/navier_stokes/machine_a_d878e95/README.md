@@ -1,10 +1,13 @@
-Place canonical Machine A Track A reference artifacts in this folder:
+Deprecated reference folder.
 
-- `anchor_manifest.json`
-- `anchor_leaves.json`
+Do not place active reference artifacts here.
 
-This folder is used by `tools/phase1_track_a_verify.ps1` and should contain
-the exact files exported from Machine A for commit
-`d878e95c4b4adb64a6f080eb8b8fa4dbbd655aaf`.
+Canonical Machine A reference for Track A now lives in:
 
-The verifier will fail fast if either file is missing.
+- `references/phase1/navier_stokes/machine_a_f06023a/`
+
+Reason:
+
+- the previous folder name implied commit `d878e95...` but the embedded
+  manifest contract was for `f06023a...`.
+- this mismatch caused deterministic contract-check failures across machines.
