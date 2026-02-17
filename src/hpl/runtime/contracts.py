@@ -27,11 +27,36 @@ class ExecutionContract:
         if required_backend is None:
             required_backend = step.get("required_backend") or self.required_backend
         token = ctx.execution_token
+        requires = step.get("requires") if isinstance(step.get("requires"), dict) else {}
         if required_backend:
             if token is None:
                 errors.append("execution token missing for backend requirement")
             elif str(required_backend).upper() not in token.allowed_backends:
                 errors.append(f"backend not permitted: {str(required_backend).upper()}")
+        required_operator_ids: List[str] = []
+        if isinstance(requires, dict):
+            operator_id = requires.get("operator_id")
+            operator_ids = requires.get("operator_ids")
+            if isinstance(operator_id, str) and operator_id.strip():
+                required_operator_ids.append(operator_id.strip().upper())
+            if isinstance(operator_ids, list):
+                required_operator_ids.extend(
+                    str(item).strip().upper()
+                    for item in operator_ids
+                    if str(item).strip()
+                )
+        if required_operator_ids:
+            if token is None or token.operator_policy is None:
+                errors.append("OperatorPermissionDenied")
+            else:
+                allowlist = {
+                    str(item).upper()
+                    for item in token.operator_policy.get("operator_allowlist", [])
+                    if str(item).strip()
+                }
+                for operator_name in sorted(set(required_operator_ids)):
+                    if operator_name not in allowlist:
+                        errors.append(f"OperatorPermissionDenied:{operator_name}")
         if token and token.measurement_modes_allowed:
             allowed_modes = {mode.upper() for mode in token.measurement_modes_allowed}
             if effect_type and effect_type.upper().startswith("MEASURE"):
@@ -40,7 +65,6 @@ class ExecutionContract:
             if effect_type.upper() in {"COMPUTE_DELTA_S", "DELTA_S_GATE"}:
                 if effect_type.upper() not in allowed_modes:
                     errors.append(f"measurement mode not permitted: {effect_type}")
-        requires = step.get("requires") if isinstance(step.get("requires"), dict) else {}
         io_scope = requires.get("io_scope") if isinstance(requires, dict) else None
         io_scopes = requires.get("io_scopes") if isinstance(requires, dict) else None
         io_endpoint = requires.get("io_endpoint") if isinstance(requires, dict) else None

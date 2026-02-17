@@ -135,6 +135,11 @@ def build_bundle(
         manifest["delta_s_v1"] = _delta_s_section(artifacts)
         manifest["delta_s_v1"]["evidence_manifest"] = "bundle_manifest.json"
 
+    canonical_section = _canonical_invoke_section(artifacts)
+    if canonical_section.get("canonical_present"):
+        manifest["canonical_invoke_v1"] = canonical_section
+        manifest["canonical_invoke_v1"]["evidence_manifest"] = "bundle_manifest.json"
+
     io_section = _io_section(artifacts)
     if io_section.get("io_present"):
         manifest["io_lane_v1"] = io_section
@@ -297,6 +302,36 @@ def _delta_s_section(artifacts: List[Artifact]) -> Dict[str, object]:
     ok = not missing_required
     return {
         "ok": ok,
+        "required_roles": required_roles,
+        "present_roles": present_roles,
+        "missing_required": missing_required,
+    }
+
+
+def _canonical_invoke_section(artifacts: List[Artifact]) -> Dict[str, object]:
+    present_roles = sorted({artifact.role for artifact in artifacts})
+    canonical_detect_roles = {
+        "canonical_eq09_report",
+        "canonical_eq15_report",
+        "admissibility_certificate",
+        "delta_s_report",
+        "collapse_decision",
+    }
+    canonical_present = any(role in canonical_detect_roles for role in present_roles)
+    if not canonical_present:
+        return {
+            "ok": True,
+            "canonical_present": False,
+            "required_roles": [],
+            "present_roles": present_roles,
+            "missing_required": [],
+        }
+    required_roles = ["canonical_eq09_report", "canonical_eq15_report"]
+    missing_required = sorted([role for role in required_roles if role not in present_roles])
+    ok = not missing_required
+    return {
+        "ok": ok,
+        "canonical_present": True,
         "required_roles": required_roles,
         "present_roles": present_roles,
         "missing_required": missing_required,

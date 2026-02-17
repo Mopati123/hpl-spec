@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 from .trace import emit_witness_record
 from .execution_token import ExecutionToken
 from .operators import registry as operator_registry
+from .runtime.invoker import CANONICAL_EQ09, CANONICAL_EQ15
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,7 @@ class SchedulerContext:
     determinism_mode: str = "deterministic"
     io_policy: Optional[Dict[str, object]] = None
     net_policy: Optional[Dict[str, object]] = None
+    operator_policy: Optional[Dict[str, object]] = None
     delta_s_policy: Optional[Dict[str, object]] = None
     delta_s_budget: int = 0
     measurement_modes_allowed: Optional[List[str]] = None
@@ -113,6 +115,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         determinism_mode=ctx.determinism_mode,
         io_policy=ctx.io_policy,
         net_policy=ctx.net_policy,
+        operator_policy=ctx.operator_policy,
         delta_s_policy=ctx.delta_s_policy,
         delta_s_budget=ctx.delta_s_budget,
         measurement_modes_allowed=ctx.measurement_modes_allowed,
@@ -680,6 +683,56 @@ def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerCon
                 "trade_fill_path": "shadow_fill.json",
                 "policy_path": policy_path,
                 "out_path": "risk_envelope.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"canonical_eq09_{index}",
+            "effect_type": "CANONICAL_INVOKE_EQ09",
+            "args": {
+                "input_path": "latency_snapshot.json",
+                "out_path": "canonical_eq09_report.json",
+            },
+            "requires": {"backend": "CLASSICAL", "operator_id": CANONICAL_EQ09},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"canonical_eq15_{index}",
+            "effect_type": "CANONICAL_INVOKE_EQ15",
+            "args": {
+                "input_path": "risk_envelope.json",
+                "out_path": "canonical_eq15_report.json",
+                "certificate_out_path": "admissibility_certificate.json",
+            },
+            "requires": {"backend": "CLASSICAL", "operator_id": CANONICAL_EQ15},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"compute_delta_s_{index}",
+            "effect_type": "COMPUTE_DELTA_S",
+            "args": {
+                "prior_path": "signal.json",
+                "posterior_path": "risk_envelope.json",
+                "canonical_eq09_path": "canonical_eq09_report.json",
+                "canonical_eq15_path": "canonical_eq15_report.json",
+                "out_path": "delta_s_report.json",
+                "method": "hash_diff_plus_canonical",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"delta_s_gate_{index}",
+            "effect_type": "DELTA_S_GATE",
+            "args": {
+                "delta_s_report_path": "delta_s_report.json",
+                "out_path": "collapse_decision.json",
+                "policy": {"threshold": 0.0, "comparator": "gte"},
             },
             "requires": {"backend": "CLASSICAL"},
         }

@@ -369,6 +369,13 @@ def _build_transcript_entry(
     index: int,
 ) -> Dict[str, object]:
     plan_id = str(plan.get("plan_id", "unknown"))
+    canonical_evidence = sorted(
+        {
+            str(key)
+            for key in result.artifact_digests.keys()
+            if str(key).startswith("canonical_")
+        }
+    )
     before_state = {"plan_id": plan_id, "step_index": index}
     after_state = {
         "plan_id": plan_id,
@@ -376,6 +383,7 @@ def _build_transcript_entry(
         "ok": result.ok,
         "effect_type": result.effect_type,
         "artifact_digests": dict(result.artifact_digests),
+        "canonical_evidence": canonical_evidence,
     }
     return {
         "step_id": step.step_id,
@@ -384,6 +392,7 @@ def _build_transcript_entry(
         "refusal_type": result.refusal_type,
         "refusal_reasons": list(result.refusal_reasons),
         "artifact_digests": dict(result.artifact_digests),
+        "canonical_evidence": canonical_evidence,
         "state_hash_before": _digest_text(_canonical_json(before_state)),
         "state_hash_after": _digest_text(_canonical_json(after_state)),
     }
@@ -525,6 +534,10 @@ def _update_evidence_roles(roles: set[str], digests: Dict[str, str]) -> None:
         lowered = str(name).lower()
         if "delta_s_report" in lowered:
             roles.add("delta_s_report")
+        if "canonical_eq09_report" in lowered:
+            roles.add("canonical_eq09_report")
+        if "canonical_eq15_report" in lowered:
+            roles.add("canonical_eq15_report")
         if "admissibility_certificate" in lowered or "gate_certificate" in lowered:
             roles.add("admissibility_certificate")
         if "collapse_decision" in lowered:

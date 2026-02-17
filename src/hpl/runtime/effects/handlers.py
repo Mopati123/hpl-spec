@@ -10,6 +10,7 @@ from ...audit.constraint_inversion import invert_constraints
 from ...backends.classical_lowering import lower_program_ir_to_backend_ir
 from ...backends.qasm_lowering import lower_backend_ir_to_qasm
 from ..context import RuntimeContext
+from ..invoker import CANONICAL_EQ09, CANONICAL_EQ15, invoke_operator
 from ..io.adapter import load_adapter
 from ..net.adapter import load_adapter as load_net_adapter
 from ..net.stabilizer import evaluate_stabilizer
@@ -178,10 +179,20 @@ def handle_compute_delta_s(step: EffectStep, ctx: RuntimeContext) -> EffectResul
     posterior_digest = _digest_bytes(posterior_bytes)
     prior_hash = _hash_to_unit(prior_bytes)
     posterior_hash = _hash_to_unit(posterior_bytes)
-    delta_s = _round_delta(abs(posterior_hash - prior_hash))
+    delta_s_base = _round_delta(abs(posterior_hash - prior_hash))
+    canonical_contribution, canonical_sources, canonical_digests, canonical_errors = (
+        _canonical_contribution(step, ctx)
+    )
+    if canonical_errors:
+        return _refuse(step, "CanonicalContributionInvalid", canonical_errors)
+    delta_s_total = _round_delta(delta_s_base + canonical_contribution)
     report = {
         "method": str(step.args.get("method", "hash_diff")),
-        "delta_s": delta_s,
+        "delta_s": delta_s_total,
+        "delta_s_base": delta_s_base,
+        "canonical_contribution": _round_delta(canonical_contribution),
+        "delta_s_canonical": _round_delta(canonical_contribution),
+        "canonical_sources": canonical_sources,
         "prior_digest": prior_digest,
         "posterior_digest": posterior_digest,
     }
@@ -196,6 +207,7 @@ def handle_compute_delta_s(step: EffectStep, ctx: RuntimeContext) -> EffectResul
         prior_path.name: prior_digest,
         posterior_path.name: posterior_digest,
     }
+    digests.update(canonical_digests)
     if out_path:
         out_path.write_text(payload, encoding="utf-8")
         digests[out_path.name] = _digest_bytes(out_path.read_bytes())
@@ -394,6 +406,99 @@ def handle_compute_signal(step: EffectStep, ctx: RuntimeContext) -> EffectResult
             "signal": digest,
         },
     )
+
+
+def handle_canonical_invoke_eq09(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    return _invoke_canonical(
+        step,
+        ctx,
+        operator_id=CANONICAL_EQ09,
+        default_name="canonical_eq09_report.json",
+    )
+
+
+def handle_canonical_invoke_eq15(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
+    return _invoke_canonical(
+        step,
+        ctx,
+        operator_id=CANONICAL_EQ15,
+        default_name="canonical_eq15_report.json",
+    )
+
+
+def _invoke_canonical(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    operator_id: str,
+    default_name: str,
+) -> EffectResult:
+    input_path = _resolve_input_path(ctx, step.args.get("input_path"))
+    if input_path is None or not input_path.exists():
+        return _refuse(step, "CanonicalInputMissing", ["canonical input missing"])
+    try:
+        payload = json.loads(input_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _refuse(step, "CanonicalInputInvalid", ["canonical input invalid json"])
+    if not isinstance(payload, dict):
+        return _refuse(step, "CanonicalInputInvalid", ["canonical input must be object"])
+
+    try:
+        result = invoke_operator(
+            operator_id,
+            payload,
+            allowlist=_operator_allowlist(ctx),
+        )
+    except PermissionError as exc:
+        return _refuse(
+            step,
+            "OperatorNotAllowed",
+            [str(exc)],
+            {input_path.name: _digest_bytes(input_path.read_bytes())},
+        )
+    except ValueError as exc:
+        return _refuse(step, "CanonicalInvokeFailed", [str(exc)])
+
+    out_path = _resolve_output_path(
+        ctx,
+        step.args,
+        key="out_path",
+        default_name=default_name,
+    )
+    payload_text = _canonical_json(result)
+    digests = {input_path.name: _digest_bytes(input_path.read_bytes())}
+    key = (
+        "canonical_eq09_report"
+        if operator_id == CANONICAL_EQ09
+        else "canonical_eq15_report"
+    )
+    if out_path:
+        out_path.write_text(payload_text, encoding="utf-8")
+        digest = _digest_bytes(out_path.read_bytes())
+        digests[out_path.name] = digest
+        digests[key] = digest
+    else:
+        digests[key] = _digest_bytes(payload_text.encode("utf-8"))
+
+    if operator_id == CANONICAL_EQ15:
+        certificate = result.get("admissibility_certificate")
+        if isinstance(certificate, dict):
+            cert_payload = _canonical_json(certificate)
+            cert_path = _resolve_output_path(
+                ctx,
+                step.args,
+                key="certificate_out_path",
+                default_name="admissibility_certificate.json",
+            )
+            if cert_path:
+                cert_path.write_text(cert_payload, encoding="utf-8")
+                cert_digest = _digest_bytes(cert_path.read_bytes())
+                digests[cert_path.name] = cert_digest
+                digests["admissibility_certificate"] = cert_digest
+            else:
+                digests["admissibility_certificate"] = _digest_bytes(
+                    cert_payload.encode("utf-8")
+                )
+    return _ok(step, digests)
 
 
 def handle_simulate_order(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
@@ -2036,6 +2141,63 @@ def _hash_to_unit(value: bytes) -> float:
     as_int = int(digest, 16)
     max_int = (1 << (len(digest) * 4)) - 1
     return as_int / max_int if max_int else 0.0
+
+
+def _canonical_contribution(
+    step: EffectStep,
+    ctx: RuntimeContext,
+) -> tuple[float, List[Dict[str, object]], Dict[str, str], List[str]]:
+    sources: List[Dict[str, object]] = []
+    digests: Dict[str, str] = {}
+    errors: List[str] = []
+    contribution = 0.0
+    input_specs = [
+        ("canonical_eq09_path", "spectral_energy", "canonical_eq09_report"),
+        ("canonical_eq15_path", "entropy_proxy", "canonical_eq15_report"),
+    ]
+    for arg_key, metric_key, role_name in input_specs:
+        value = step.args.get(arg_key)
+        if value is None:
+            continue
+        source_path = _resolve_input_path(ctx, value)
+        if source_path is None or not source_path.exists():
+            errors.append(f"canonical input missing: {arg_key}")
+            continue
+        try:
+            report = json.loads(source_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            errors.append(f"canonical input invalid json: {arg_key}")
+            continue
+        if not isinstance(report, dict):
+            errors.append(f"canonical input invalid object: {arg_key}")
+            continue
+        metric_value = float(report.get(metric_key, 0.0))
+        weighted = metric_value * 0.01
+        contribution += weighted
+        digest = _digest_bytes(source_path.read_bytes())
+        digests[source_path.name] = digest
+        digests[role_name] = digest
+        sources.append(
+            {
+                "role": role_name,
+                "path": source_path.name,
+                "digest": digest,
+                "metric_key": metric_key,
+                "metric_value": _round_delta(metric_value),
+                "weighted_contribution": _round_delta(weighted),
+            }
+        )
+    return _round_delta(contribution), sources, digests, errors
+
+
+def _operator_allowlist(ctx: RuntimeContext) -> Optional[List[str]]:
+    token = ctx.execution_token
+    if token is None or token.operator_policy is None:
+        return None
+    raw = token.operator_policy.get("operator_allowlist", [])
+    if not isinstance(raw, list):
+        return None
+    return [str(item) for item in raw if str(item).strip()]
 
 
 def _seeded_float(seed: str, label: str) -> float:

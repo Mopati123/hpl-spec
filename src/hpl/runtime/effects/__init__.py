@@ -9,6 +9,8 @@ from .handlers import (
     handle_evaluate_agent_proposal,
     handle_ingest_market_fixture,
     handle_compute_signal,
+    handle_canonical_invoke_eq09,
+    handle_canonical_invoke_eq15,
     handle_simulate_order,
     handle_update_risk_envelope,
     handle_emit_trade_report,
@@ -72,6 +74,8 @@ register_handler(EffectType.VALIDATE_QUANTUM_SEMANTICS, handle_validate_quantum_
 register_handler(EffectType.EVALUATE_AGENT_PROPOSAL, handle_evaluate_agent_proposal)
 register_handler(EffectType.INGEST_MARKET_FIXTURE, handle_ingest_market_fixture)
 register_handler(EffectType.COMPUTE_SIGNAL, handle_compute_signal)
+register_handler(EffectType.CANONICAL_INVOKE_EQ09, handle_canonical_invoke_eq09)
+register_handler(EffectType.CANONICAL_INVOKE_EQ15, handle_canonical_invoke_eq15)
 register_handler(EffectType.SIMULATE_ORDER, handle_simulate_order)
 register_handler(EffectType.UPDATE_RISK_ENVELOPE, handle_update_risk_envelope)
 register_handler(EffectType.EMIT_TRADE_REPORT, handle_emit_trade_report)

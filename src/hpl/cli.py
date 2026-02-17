@@ -23,6 +23,7 @@ from .runtime.engine import RuntimeEngine
 from .audit.constraint_inversion import invert_constraints
 from .audit.constraint_witness import build_constraint_witness
 from .execution_token import ExecutionToken
+from .operators import canonical_operator_allowlist
 from .scheduler import SchedulerContext, plan as plan_program
 from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
@@ -1496,6 +1497,11 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
         fixture_path = _relative_to_root(args.market_fixture)
         policy_path = _relative_to_root(args.policy)
         model_path = _relative_to_root(args.shadow_model)
+        canonical_allowlist = canonical_operator_allowlist(root=ROOT)
+        operator_policy = {
+            "operator_allowlist": canonical_allowlist,
+            "operator_strict": True,
+        }
 
         ctx = SchedulerContext(
             require_epoch_verification=args.require_epoch,
@@ -1511,6 +1517,7 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
             trading_shadow_model_path=model_path,
             trading_report_json_path=Path("trade_report.json"),
             trading_report_md_path=Path("trade_report.md"),
+            operator_policy=operator_policy,
         )
         plan_obj = plan_program(program_ir, ctx)
         plan_dict = plan_obj.to_dict()
@@ -1565,6 +1572,16 @@ def _cmd_demo_trading_shadow(args: argparse.Namespace) -> int:
             artifacts.append(bundle_module._artifact("trade_report", report_json_path))
         if report_md_path.exists():
             artifacts.append(bundle_module._artifact("trade_report_md", report_md_path))
+        canonical_role_paths = [
+            ("canonical_eq09_report", work_dir / "canonical_eq09_report.json"),
+            ("canonical_eq15_report", work_dir / "canonical_eq15_report.json"),
+            ("admissibility_certificate", work_dir / "admissibility_certificate.json"),
+            ("delta_s_report", work_dir / "delta_s_report.json"),
+            ("collapse_decision", work_dir / "collapse_decision.json"),
+        ]
+        for role, path in canonical_role_paths:
+            if path.exists():
+                artifacts.append(bundle_module._artifact(role, path))
         if token_dict:
             token_path = work_dir / "execution_token.json"
             _write_json(token_path, token_dict)
@@ -1744,6 +1761,16 @@ def _cmd_demo_trading_io_shadow(args: argparse.Namespace) -> int:
             ("remediation_plan", work_dir / "remediation_plan.json"),
         ]
         for role, path in io_role_paths:
+            if path.exists():
+                artifacts.append(bundle_module._artifact(role, path))
+        canonical_role_paths = [
+            ("canonical_eq09_report", work_dir / "canonical_eq09_report.json"),
+            ("canonical_eq15_report", work_dir / "canonical_eq15_report.json"),
+            ("admissibility_certificate", work_dir / "admissibility_certificate.json"),
+            ("delta_s_report", work_dir / "delta_s_report.json"),
+            ("collapse_decision", work_dir / "collapse_decision.json"),
+        ]
+        for role, path in canonical_role_paths:
             if path.exists():
                 artifacts.append(bundle_module._artifact(role, path))
 

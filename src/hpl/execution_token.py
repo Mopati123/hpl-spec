@@ -88,6 +88,29 @@ def _normalize_net_policy(net_policy: Optional[Dict[str, object]]) -> Optional[D
     return normalized
 
 
+def _normalize_operator_policy(
+    operator_policy: Optional[Dict[str, object]]
+) -> Optional[Dict[str, object]]:
+    if not isinstance(operator_policy, dict):
+        return None
+    allowlist_raw = operator_policy.get("operator_allowlist")
+    allowlist = []
+    if isinstance(allowlist_raw, list):
+        allowlist = sorted(
+            {
+                str(item).upper()
+                for item in allowlist_raw
+                if str(item).strip()
+            }
+        )
+    strict = bool(operator_policy.get("operator_strict", True))
+    normalized: Dict[str, object] = {
+        "operator_allowlist": allowlist,
+        "operator_strict": strict,
+    }
+    return normalized
+
+
 @dataclass(frozen=True)
 class ExecutionToken:
     token_id: str
@@ -97,6 +120,7 @@ class ExecutionToken:
     determinism_mode: str
     io_policy: Optional[Dict[str, object]] = None
     net_policy: Optional[Dict[str, object]] = None
+    operator_policy: Optional[Dict[str, object]] = None
     delta_s_policy: Optional[Dict[str, object]] = None
     delta_s_budget: int = 0
     measurement_modes_allowed: Optional[List[str]] = None
@@ -115,6 +139,8 @@ class ExecutionToken:
             data["io_policy"] = dict(self.io_policy)
         if self.net_policy is not None:
             data["net_policy"] = dict(self.net_policy)
+        if self.operator_policy is not None:
+            data["operator_policy"] = dict(self.operator_policy)
         if self.delta_s_policy is not None:
             data["delta_s_policy"] = dict(self.delta_s_policy)
         if self.delta_s_budget:
@@ -136,6 +162,7 @@ class ExecutionToken:
         determinism_mode: str = "deterministic",
         io_policy: Optional[Dict[str, object]] = None,
         net_policy: Optional[Dict[str, object]] = None,
+        operator_policy: Optional[Dict[str, object]] = None,
         delta_s_policy: Optional[Dict[str, object]] = None,
         delta_s_budget: int = 0,
         measurement_modes_allowed: Optional[List[str]] = None,
@@ -147,6 +174,7 @@ class ExecutionToken:
         modes = _normalize_modes(measurement_modes_allowed or [])
         normalized_io_policy = _normalize_io_policy(io_policy)
         normalized_net_policy = _normalize_net_policy(net_policy)
+        normalized_operator_policy = _normalize_operator_policy(operator_policy)
         core = {
             "allowed_backends": allowed,
             "preferred_backend": preferred,
@@ -154,6 +182,7 @@ class ExecutionToken:
             "determinism_mode": determinism_mode,
             "io_policy": normalized_io_policy,
             "net_policy": normalized_net_policy,
+            "operator_policy": normalized_operator_policy,
             "delta_s_policy": delta_s_policy or {},
             "delta_s_budget": int(delta_s_budget),
             "measurement_modes_allowed": modes,
@@ -168,6 +197,7 @@ class ExecutionToken:
             determinism_mode=determinism_mode,
             io_policy=normalized_io_policy,
             net_policy=normalized_net_policy,
+            operator_policy=normalized_operator_policy,
             delta_s_policy=dict(delta_s_policy) if isinstance(delta_s_policy, dict) else None,
             delta_s_budget=int(delta_s_budget),
             measurement_modes_allowed=modes if modes else None,
@@ -185,6 +215,7 @@ class ExecutionToken:
         determinism_mode = str(data.get("determinism_mode", "deterministic"))
         io_policy = _normalize_io_policy(data.get("io_policy"))
         net_policy = _normalize_net_policy(data.get("net_policy"))
+        operator_policy = _normalize_operator_policy(data.get("operator_policy"))
         delta_s_policy = data.get("delta_s_policy")
         if not isinstance(delta_s_policy, dict):
             delta_s_policy = None
@@ -203,6 +234,7 @@ class ExecutionToken:
                 determinism_mode=determinism_mode,
                 io_policy=io_policy,
                 net_policy=net_policy,
+                operator_policy=operator_policy,
                 delta_s_policy=delta_s_policy if isinstance(delta_s_policy, dict) else None,
                 delta_s_budget=delta_s_budget,
                 measurement_modes_allowed=list(measurement_modes_allowed),
@@ -217,6 +249,7 @@ class ExecutionToken:
             determinism_mode=determinism_mode,
             io_policy=io_policy,
             net_policy=net_policy,
+            operator_policy=operator_policy,
             delta_s_policy=dict(delta_s_policy) if isinstance(delta_s_policy, dict) else None,
             delta_s_budget=delta_s_budget,
             measurement_modes_allowed=_normalize_modes(list(measurement_modes_allowed)) if measurement_modes_allowed else None,

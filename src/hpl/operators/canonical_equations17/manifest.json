@@ -1,0 +1,16 @@
+{
+  "pack_id": "canonical_equations17",
+  "version": "1.0.0",
+  "operators": [
+    {
+      "id": "CANONICAL_EQ09",
+      "module": "hpl.operators.canonical_equations17.eq09",
+      "call": "apply"
+    },
+    {
+      "id": "CANONICAL_EQ15",
+      "module": "hpl.operators.canonical_equations17.eq15",
+      "call": "apply"
+    }
+  ]
+}

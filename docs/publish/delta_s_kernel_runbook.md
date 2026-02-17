@@ -20,6 +20,19 @@ When `collapse_requires_delta_s=true` in the ExecutionToken, bundles must includ
 Optional but recommended:
 
 - `measurement_trace.json`
+- `canonical_eq09_report.json`
+- `canonical_eq15_report.json`
+
+## Canonical Invoke Integration
+
+When canonical invoke operators are used, runtime emits deterministic equation evidence:
+
+- `canonical_eq09_report.json`
+- `canonical_eq15_report.json`
+
+These artifacts are optional for plain Delta-S mode, but when present they are surfaced in
+the bundle manifest under `canonical_invoke_v1` and can contribute to the Delta-S report via
+`canonical_contribution` (with compatibility alias `delta_s_canonical`).
 
 ## Minimal Flow (Effect-Level)
 

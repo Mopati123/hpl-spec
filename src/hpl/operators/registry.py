@@ -120,3 +120,31 @@ def validate_plan_operators(
     if missing:
         errors.append(f"operator registry missing: {', '.join(missing)}")
     return not errors, errors
+
+
+def load_canonical_operator_manifest(root: Path = ROOT) -> Dict[str, object]:
+    manifest_path = (
+        root / "src" / "hpl" / "operators" / "canonical_equations17" / "manifest.json"
+    )
+    if not manifest_path.exists():
+        return {}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def canonical_operator_allowlist(root: Path = ROOT) -> List[str]:
+    manifest = load_canonical_operator_manifest(root=root)
+    entries = manifest.get("operators", [])
+    if not isinstance(entries, list):
+        return []
+    operator_ids: List[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        operator_id = entry.get("id")
+        if isinstance(operator_id, str) and operator_id.strip():
+            operator_ids.append(operator_id.strip().upper())
+    return sorted(set(operator_ids))

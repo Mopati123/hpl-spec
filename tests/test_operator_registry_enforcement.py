@@ -63,6 +63,49 @@ class OperatorRegistryEnforcementTests(unittest.TestCase):
             any("operator registry missing" in reason for reason in result.reasons)
         )
 
+    def test_runtime_denied_when_operator_not_allowlisted(self):
+        token = ExecutionToken.build(
+            allowed_backends=["CLASSICAL"],
+            operator_policy={"operator_allowlist": [], "operator_strict": True},
+        )
+        plan = {
+            "status": "planned",
+            "steps": [
+                {
+                    "step_id": "canonical_step",
+                    "effect_type": "NOOP",
+                    "requires": {"backend": "CLASSICAL", "operator_id": "CANONICAL_EQ09"},
+                }
+            ],
+            "execution_token": token.to_dict(),
+        }
+        ctx = RuntimeContext(execution_token=token)
+        contract = ExecutionContract(allowed_steps={"canonical_step"})
+        result = RuntimeEngine().run(plan, ctx, contract)
+        self.assertEqual(result.status, "denied")
+        self.assertTrue(any("OperatorPermissionDenied" in reason for reason in result.reasons))
+
+    def test_runtime_allows_allowlisted_operator(self):
+        token = ExecutionToken.build(
+            allowed_backends=["CLASSICAL"],
+            operator_policy={"operator_allowlist": ["CANONICAL_EQ09"], "operator_strict": True},
+        )
+        plan = {
+            "status": "planned",
+            "steps": [
+                {
+                    "step_id": "canonical_step",
+                    "effect_type": "NOOP",
+                    "requires": {"backend": "CLASSICAL", "operator_id": "CANONICAL_EQ09"},
+                }
+            ],
+            "execution_token": token.to_dict(),
+        }
+        ctx = RuntimeContext(execution_token=token)
+        contract = ExecutionContract(allowed_steps={"canonical_step"})
+        result = RuntimeEngine().run(plan, ctx, contract)
+        self.assertEqual(result.status, "completed")
+
 
 if __name__ == "__main__":
     unittest.main()
