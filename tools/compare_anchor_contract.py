@@ -1,7 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
+import string
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -13,6 +14,29 @@ CONTRACT_FIELDS = [
     "bundle_manifest_digest",
     "leaves_digest",
 ]
+
+
+def normalize_sha(value: object) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized.startswith("sha:"):
+        normalized = normalized[4:]
+    if not normalized:
+        return None
+    if any(ch not in string.hexdigits.lower() for ch in normalized):
+        return None
+    return normalized
+
+
+def git_commit_matches(a_value: object, b_value: object) -> bool:
+    a_norm = normalize_sha(a_value)
+    b_norm = normalize_sha(b_value)
+    if a_norm is not None and b_norm is not None:
+        if len(a_norm) >= 7 and len(b_norm) >= 7:
+            return a_norm == b_norm or a_norm.startswith(b_norm) or b_norm.startswith(a_norm)
+        return a_norm == b_norm
+    return a_value == b_value
 
 
 def _load_json(path: Path) -> Dict[str, object]:
@@ -103,7 +127,16 @@ def main() -> int:
     a_contract = _contract(a_manifest)
     b_contract = _contract(b_manifest)
 
-    contract_match = all(a_contract[field] == b_contract[field] for field in CONTRACT_FIELDS)
+    contract_match = True
+    for field in CONTRACT_FIELDS:
+        if field == "git_commit":
+            equal = git_commit_matches(a_contract[field], b_contract[field])
+        else:
+            equal = a_contract[field] == b_contract[field]
+        if not equal:
+            contract_match = False
+            break
+
     merkle_match = False
     root_cause = "none"
     next_action = "none"
