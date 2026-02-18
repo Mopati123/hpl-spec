@@ -115,7 +115,7 @@ def _resolve_path(
     return resolved
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Compare two anchor contract states.")
     parser.add_argument("--machine-a-manifest", type=Path)
     parser.add_argument("--machine-a-leaves", type=Path)
@@ -125,7 +125,7 @@ def main() -> int:
     parser.add_argument("--reference-leaves", type=Path)
     parser.add_argument("--candidate-manifest", type=Path)
     parser.add_argument("--candidate-leaves", type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         machine_a_manifest = _resolve_path(

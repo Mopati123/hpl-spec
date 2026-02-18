@@ -1,23 +1,21 @@
 from __future__ import annotations
 
+import importlib.util
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = sys.executable
 TOOL = ROOT / "tools" / "compare_anchor_contract.py"
 
 
-def _run_compare(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [PYTHON, str(TOOL), *args],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
+def _load_tool():
+    spec = importlib.util.spec_from_file_location("compare_anchor_contract", TOOL)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _write_json(path: Path, data: object) -> None:
@@ -44,8 +42,8 @@ def _make_leaves() -> dict[str, object]:
     }
 
 
-def _run_payload(a_manifest: Path, a_leaves: Path, b_manifest: Path, b_leaves: Path) -> tuple[int, dict[str, object]]:
-    result = _run_compare(
+def _run_payload(module, capsys, a_manifest: Path, a_leaves: Path, b_manifest: Path, b_leaves: Path) -> tuple[int, dict[str, object]]:
+    code = module.main(
         [
             "--machine-a-manifest",
             str(a_manifest),
@@ -57,11 +55,13 @@ def _run_payload(a_manifest: Path, a_leaves: Path, b_manifest: Path, b_leaves: P
             str(b_leaves),
         ]
     )
-    return result.returncode, json.loads(result.stdout.strip())
+    out = capsys.readouterr().out.strip()
+    return code, json.loads(out)
 
 
-def test_compare_anchor_contract_preflight_missing_paths(tmp_path: Path) -> None:
-    result = _run_compare(
+def test_compare_anchor_contract_preflight_missing_paths(tmp_path: Path, capsys) -> None:
+    module = _load_tool()
+    code = module.main(
         [
             "--machine-a-manifest",
             str(tmp_path / "a_manifest.json"),
@@ -73,15 +73,16 @@ def test_compare_anchor_contract_preflight_missing_paths(tmp_path: Path) -> None
             str(tmp_path / "b_leaves.json"),
         ]
     )
-    assert result.returncode == 2
-    payload = json.loads(result.stdout.strip())
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert code == 2
     assert payload["CONTRACT_MATCH"] is False
     assert payload["MERKLE_MATCH"] is False
     assert payload["ROOT_CAUSE"] == "missing reference/candidate anchor artifacts"
     assert len(payload["missing_paths"]) == 4
 
 
-def test_compare_anchor_contract_match() -> None:
+def test_compare_anchor_contract_match(capsys) -> None:
+    module = _load_tool()
     ref_manifest = ROOT / "refs" / "io_shadow_machine_a" / "anchor_manifest.json"
     ref_leaves = ROOT / "refs" / "io_shadow_machine_a" / "anchor_leaves.json"
     cand_manifest = ROOT / "artifacts" / "phase1" / "trading_io_shadow" / "run_B" / "anchor" / "anchor_manifest.json"
@@ -89,13 +90,14 @@ def test_compare_anchor_contract_match() -> None:
     if not (ref_manifest.exists() and ref_leaves.exists() and cand_manifest.exists() and cand_leaves.exists()):
         return
 
-    code, payload = _run_payload(ref_manifest, ref_leaves, cand_manifest, cand_leaves)
+    code, payload = _run_payload(module, capsys, ref_manifest, ref_leaves, cand_manifest, cand_leaves)
     assert code == 0
     assert payload["CONTRACT_MATCH"] is True
     assert payload["MERKLE_MATCH"] is True
 
 
-def test_git_commit_short_vs_full_prefix_passes(tmp_path: Path) -> None:
+def test_git_commit_short_vs_full_prefix_passes(tmp_path: Path, capsys) -> None:
+    module = _load_tool()
     leaves = _make_leaves()
     a_manifest = tmp_path / "a_manifest.json"
     b_manifest = tmp_path / "b_manifest.json"
@@ -106,13 +108,14 @@ def test_git_commit_short_vs_full_prefix_passes(tmp_path: Path) -> None:
     _write_json(a_leaves, leaves)
     _write_json(b_leaves, leaves)
 
-    code, payload = _run_payload(a_manifest, a_leaves, b_manifest, b_leaves)
+    code, payload = _run_payload(module, capsys, a_manifest, a_leaves, b_manifest, b_leaves)
     assert code == 0
     assert payload["CONTRACT_MATCH"] is True
     assert payload["MERKLE_MATCH"] is True
 
 
-def test_git_commit_non_prefix_fails(tmp_path: Path) -> None:
+def test_git_commit_non_prefix_fails(tmp_path: Path, capsys) -> None:
+    module = _load_tool()
     leaves = _make_leaves()
     a_manifest = tmp_path / "a_manifest.json"
     b_manifest = tmp_path / "b_manifest.json"
@@ -123,14 +126,15 @@ def test_git_commit_non_prefix_fails(tmp_path: Path) -> None:
     _write_json(a_leaves, leaves)
     _write_json(b_leaves, leaves)
 
-    code, payload = _run_payload(a_manifest, a_leaves, b_manifest, b_leaves)
+    code, payload = _run_payload(module, capsys, a_manifest, a_leaves, b_manifest, b_leaves)
     assert code == 1
     assert payload["CONTRACT_MATCH"] is False
     assert payload["MERKLE_MATCH"] is False
     assert "git_commit" in payload["mismatched_fields"]
 
 
-def test_git_commit_case_insensitive_passes(tmp_path: Path) -> None:
+def test_git_commit_case_insensitive_passes(tmp_path: Path, capsys) -> None:
+    module = _load_tool()
     leaves = _make_leaves()
     a_manifest = tmp_path / "a_manifest.json"
     b_manifest = tmp_path / "b_manifest.json"
@@ -141,13 +145,14 @@ def test_git_commit_case_insensitive_passes(tmp_path: Path) -> None:
     _write_json(a_leaves, leaves)
     _write_json(b_leaves, leaves)
 
-    code, payload = _run_payload(a_manifest, a_leaves, b_manifest, b_leaves)
+    code, payload = _run_payload(module, capsys, a_manifest, a_leaves, b_manifest, b_leaves)
     assert code == 0
     assert payload["CONTRACT_MATCH"] is True
     assert payload["MERKLE_MATCH"] is True
 
 
-def test_git_commit_too_short_is_strict(tmp_path: Path) -> None:
+def test_git_commit_too_short_is_strict(tmp_path: Path, capsys) -> None:
+    module = _load_tool()
     leaves = _make_leaves()
     a_manifest = tmp_path / "a_manifest.json"
     b_manifest = tmp_path / "b_manifest.json"
@@ -158,7 +163,7 @@ def test_git_commit_too_short_is_strict(tmp_path: Path) -> None:
     _write_json(a_leaves, leaves)
     _write_json(b_leaves, leaves)
 
-    code, payload = _run_payload(a_manifest, a_leaves, b_manifest, b_leaves)
+    code, payload = _run_payload(module, capsys, a_manifest, a_leaves, b_manifest, b_leaves)
     assert code == 1
     assert payload["CONTRACT_MATCH"] is False
     assert payload["MERKLE_MATCH"] is False
