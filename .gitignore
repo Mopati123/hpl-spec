@@ -5,6 +5,13 @@ __pycache__/
 .claude/
 
 HPL_CI_ED25519_PRIVATE_KEY*.txt
+collapse_decision.json
+delta_s_report.json
+market_snapshot.json
+measurement_trace.json
+risk_envelope.json
+signal.json
+trade_fill.json
 extensions.json
 artifacts/
 *.egg-info/
