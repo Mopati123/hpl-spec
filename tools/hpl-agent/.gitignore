@@ -1,0 +1,12 @@
+.env
+.hpl_sessions/
+.hpl_keys/
+.hpl_memory/
+.hpl_memory_demo/
+.hpl_audit.jsonl
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+dist/
+build/
