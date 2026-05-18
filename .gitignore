@@ -9,3 +9,4 @@ extensions.json
 artifacts/
 *.egg-info/
 **/*.egg-info/
+.venv/
