@@ -1774,6 +1774,11 @@ def _emit_net_artifacts(
 ) -> EffectResult:
     request = _sanitize_payload(request)
     response = _sanitize_payload(response)
+
+    if isinstance(response, dict):
+        response.setdefault("request_id", request.get("request_id"))
+        response.setdefault("endpoint", request.get("endpoint"))
+        response.setdefault("adapter_contract", "NET_ADAPTER_CONTRACT_V1")
     request_path = _resolve_output_path(
         ctx,
         step.args,
