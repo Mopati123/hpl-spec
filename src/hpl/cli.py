@@ -27,6 +27,7 @@ from .scheduler import SchedulerContext, plan as plan_program
 from .backends.classical_lowering import lower_program_ir_to_backend_ir
 from .backends.qasm_lowering import lower_backend_ir_to_qasm
 from .runtime.effects.measurement_selection import build_measurement_selection
+import os
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -1718,7 +1719,19 @@ def _cmd_demo_trading_io_shadow(args: argparse.Namespace) -> int:
             if isinstance(step, dict) and step.get("step_id")
         }
         contract = ExecutionContract(allowed_steps=allowed_steps)
-        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+
+        old_hpl_io_enabled = os.environ.get("HPL_IO_ENABLED")
+        if getattr(args, "enable_io", False):
+            os.environ["HPL_IO_ENABLED"] = "1"
+
+        try:
+            runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        finally:
+            if old_hpl_io_enabled is None:
+                os.environ.pop("HPL_IO_ENABLED", None)
+            else:
+                os.environ["HPL_IO_ENABLED"] = old_hpl_io_enabled
+
         runtime_dict = runtime_result.to_dict()
         _write_json(runtime_path, runtime_dict)
 
@@ -1872,6 +1885,10 @@ def _cmd_demo_trading_io_live_min(args: argparse.Namespace) -> int:
             "io_nonce_policy": "HPL_DETERMINISTIC_NONCE_V1",
             "io_redaction_policy_id": "R1",
         }
+
+        if args.io_mode != "live":
+            errors.append(f"io_mode not live: {args.io_mode}")
+
         ctx = SchedulerContext(
             require_epoch_verification=args.require_epoch,
             anchor_path=args.anchor,
@@ -1910,7 +1927,19 @@ def _cmd_demo_trading_io_live_min(args: argparse.Namespace) -> int:
             if isinstance(step, dict) and step.get("step_id")
         }
         contract = ExecutionContract(allowed_steps=allowed_steps)
-        runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+
+        old_hpl_io_enabled = os.environ.get("HPL_IO_ENABLED")
+        if getattr(args, "enable_io", False):
+            os.environ["HPL_IO_ENABLED"] = "1"
+
+        try:
+            runtime_result = RuntimeEngine().run(plan_dict, runtime_ctx, contract)
+        finally:
+            if old_hpl_io_enabled is None:
+                os.environ.pop("HPL_IO_ENABLED", None)
+            else:
+                os.environ["HPL_IO_ENABLED"] = old_hpl_io_enabled
+
         runtime_dict = runtime_result.to_dict()
         _write_json(runtime_path, runtime_dict)
 

@@ -1129,7 +1129,71 @@ def handle_verify_bundle(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
         return _refuse(step, "BundleSignatureInvalid", errors, digests)
     return _ok(step, digests)
 
+def _ensure_io_policy(
+    step: EffectStep,
+    ctx: RuntimeContext,
+    required_scope: str,
+) -> EffectResult | None:
+    token = getattr(ctx, "execution_token", None)
+    policy = getattr(token, "io_policy", None) or {}
 
+    if not policy.get("io_allowed", False):
+        return _refuse(
+            step,
+            "IO_POLICY_DENIED",
+            [
+                f"required_scope={required_scope}",
+                f"step_id={step.step_id}",
+            ],
+        )
+
+    scopes = set(policy.get("io_scopes", []) or [])
+    if required_scope not in scopes:
+        return _refuse(
+    step,
+    "IOPermissionDenied",
+            [
+                f"required_scope={required_scope}",
+                f"available_scopes={sorted(scopes)}",
+                f"step_id={step.step_id}",
+            ],
+        )
+
+    endpoint = step.args.get("endpoint") or step.requires.get("io_endpoint")
+    allowed_endpoints = policy.get("io_endpoints_allowed")
+    if allowed_endpoints and endpoint not in allowed_endpoints:
+        return _refuse(
+    step,
+    "EndpointNotAllowed",            [
+                f"endpoint={endpoint}",
+                f"allowed_endpoints={sorted(allowed_endpoints)}",
+                f"step_id={step.step_id}",
+            ],
+        )
+
+    params = step.args.get("params")
+    timeout_ms = None
+    if isinstance(params, dict):
+        timeout_ms = params.get("timeout_ms")
+
+    max_timeout_ms = policy.get("io_timeout_ms")
+    if (
+        timeout_ms is not None
+        and max_timeout_ms is not None
+        and timeout_ms > max_timeout_ms
+    ):
+        return _refuse(
+    step,
+    "IOTimeout",
+    [
+        f"timeout_ms={timeout_ms}",
+        f"max_timeout_ms={max_timeout_ms}",
+        f"timeout_bucket=T{max_timeout_ms}ms",
+        f"step_id={step.step_id}",
+    ],
+)
+
+    return None
 def handle_io_connect(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
     policy_error = _ensure_io_policy(step, ctx, required_scope="BROKER_CONNECT")
     if policy_error:
@@ -1494,8 +1558,6 @@ def handle_net_close(step: EffectStep, ctx: RuntimeContext) -> EffectResult:
         }
     return _emit_net_artifacts(step, ctx, request, response, event_type="close")
 
-
-def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str) -> Optional[EffectResult]:
     token = ctx.execution_token
     if token is None or token.io_policy is None or not token.io_policy.get("io_allowed", False):
         return _refuse(step, "IOPermissionDenied", ["io not permitted"])
@@ -1507,6 +1569,16 @@ def _ensure_io_policy(step: EffectStep, ctx: RuntimeContext, required_scope: str
         if mode != "live":
             return _refuse(step, "IOModeNotAllowed", ["io_mode not live"])
     endpoint = str(step.args.get("endpoint", "")).strip()
+    if required_scope.upper() in {"ORDER_SUBMIT", "ORDER_CANCEL"}:
+        mode = str(token.io_policy.get("io_mode", "dry_run")).lower()
+        if mode != "live":
+            return _refuse(step, "IOModeNotAllowed", ["io_mode not live"])
+        if endpoint != "broker://demo" and os.getenv("HPL_LIVE_TRADING_ENABLED") != "1":
+            return _refuse(
+                step,
+                "LiveTradingGuardNotEnabled",
+                ["HPL_LIVE_TRADING_ENABLED not set for live broker endpoint"],
+            )
     allowed_endpoints = {
         str(item) for item in token.io_policy.get("io_endpoints_allowed", []) if str(item).strip()
     }
