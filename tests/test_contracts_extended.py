@@ -350,21 +350,21 @@ class TestPreconditionsNetPolicy(unittest.TestCase):
         return _token(net_policy=net_policy)
 
     def test_net_cap_no_token_denied(self):
-        """No token → NetPermissionDenied."""
+        """No token → NETPermissionDenied."""
         contract = ExecutionContract()
         step = _step(requires={"net_cap": "HTTP"})
         ok, errs = contract.preconditions(step, _ctx(token=None))
         self.assertFalse(ok)
-        self.assertIn("NetPermissionDenied", errs)
+        self.assertIn("NETPermissionDenied", errs)
 
     def test_net_cap_no_net_policy_denied(self):
-        """Token exists but net_policy is None → NetPermissionDenied."""
+        """Token exists but net_policy is None → NETPermissionDenied."""
         tok = ExecutionToken.build(allowed_backends=["CLASSICAL"])
         contract = ExecutionContract()
         step = _step(requires={"net_cap": "HTTP"})
         ok, errs = contract.preconditions(step, _ctx(token=tok))
         self.assertFalse(ok)
-        self.assertIn("NetPermissionDenied", errs)
+        self.assertIn("NETPermissionDenied", errs)
 
     def test_net_cap_allowed_passes(self):
         """net_cap in policy → passes."""
@@ -375,13 +375,13 @@ class TestPreconditionsNetPolicy(unittest.TestCase):
         self.assertTrue(ok)
 
     def test_net_cap_not_permitted(self):
-        """net_cap not in policy → NetPermissionDenied:cap."""
+        """net_cap not in policy → NETPermissionDenied:cap."""
         tok = self._net_token(net_caps=["HTTP"])
         contract = ExecutionContract()
         step = _step(requires={"net_cap": "WEBSOCKET"})
         ok, errs = contract.preconditions(step, _ctx(token=tok))
         self.assertFalse(ok)
-        self.assertTrue(any("NetPermissionDenied:WEBSOCKET" in e for e in errs))
+        self.assertTrue(any("NETPermissionDenied:WEBSOCKET" in e for e in errs))
 
     def test_net_caps_list_line_78(self):
         """Line 78: net_caps is a list → each added to required_net_caps."""
@@ -398,7 +398,7 @@ class TestPreconditionsNetPolicy(unittest.TestCase):
         step = _step(requires={"net_caps": ["HTTP", "GRPC"]})
         ok, errs = contract.preconditions(step, _ctx(token=tok))
         self.assertFalse(ok)
-        self.assertTrue(any("NetPermissionDenied:GRPC" in e for e in errs))
+        self.assertTrue(any("NETPermissionDenied:GRPC" in e for e in errs))
 
     def test_net_endpoint_allowed_line_96(self):
         """Endpoint in allowlist → passes."""
@@ -409,13 +409,13 @@ class TestPreconditionsNetPolicy(unittest.TestCase):
         self.assertTrue(ok)
 
     def test_net_endpoint_not_in_allowlist_line_97(self):
-        """Endpoint not in allowlist → NetEndpointNotAllowed."""
+        """Endpoint not in allowlist → NETEndpointNotAllowed."""
         tok = self._net_token(net_caps=[], net_endpoints=["api.example.com"])
         contract = ExecutionContract()
         step = _step(requires={"net_endpoint": "api.other.com"})
         ok, errs = contract.preconditions(step, _ctx(token=tok))
         self.assertFalse(ok)
-        self.assertIn("NetEndpointNotAllowed", errs)
+        self.assertIn("NETEndpointNotAllowed", errs)
 
     def test_net_endpoint_empty_allowlist_no_restriction(self):
         """Empty endpoint allowlist → no restriction on endpoints."""

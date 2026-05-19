@@ -78,7 +78,7 @@ class ExecutionContract:
             required_net_caps.extend([str(item) for item in net_caps])
         if required_net_caps or net_endpoint:
             if token is None or token.net_policy is None:
-                errors.append("NetPermissionDenied")
+                errors.append("NETPermissionDenied")
             else:
                 allowed_caps = {
                     str(item).upper()
@@ -87,14 +87,14 @@ class ExecutionContract:
                 }
                 for cap in required_net_caps:
                     if cap.upper() not in allowed_caps:
-                        errors.append(f"NetPermissionDenied:{cap}")
+                        errors.append(f"NETPermissionDenied:{cap}")
                 allowed_endpoints = {
                     str(item)
                     for item in token.net_policy.get("net_endpoints_allowlist", [])
                     if str(item).strip()
                 }
                 if net_endpoint and allowed_endpoints and str(net_endpoint) not in allowed_endpoints:
-                    errors.append("NetEndpointNotAllowed")
+                    errors.append("NETEndpointNotAllowed")
         return not errors, errors
 
     def postconditions(self, step: Dict[str, object], ctx: RuntimeContext) -> Tuple[bool, List[str]]:
