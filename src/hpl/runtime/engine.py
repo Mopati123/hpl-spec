@@ -198,7 +198,7 @@ class RuntimeEngine:
                 remaining_io_calls -= 1
             if remaining_net_calls is not None and _requires_net(step):
                 if remaining_net_calls <= 0:
-                    reasons.append("NetBudgetExceeded")
+                    reasons.append("NETBudgetExceeded")
                     witness_records.append(
                         _build_witness(
                             stage="net_budget_denied",
