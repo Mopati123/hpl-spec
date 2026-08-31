@@ -3,13 +3,13 @@
   "registry_version": "1.0.0",
   "federation_contract_id": "hpl.architecture-federation",
   "federation_contract_version": "1.0.0",
-  "hpl_commit": "be1e37d396220c5bc3423b53a8228048cdf10307",
+  "hpl_commit": "9f540740b5c82a2e0375fa8508ca2139fbf994d7",
   "execution_owner": "hpl.scheduler",
   "members": [
     {
       "repository": "Mopati123/ApexQuantumICT",
       "branch": "feat/join-h-architecture-ir-federation",
-      "commit": "5b62a6ad32998b3de6f01cd01a329db7bff394c7",
+      "commit": "ee4705f9ea2b32eabb898dfa40b5c8917fee582d",
       "architecture_path": "architecture/apex_seven_hamiltonian.architecture.json",
       "architecture_id": "apexquantumict.seven_hamiltonian.trading.v1",
       "domain": "trading"
@@ -17,7 +17,7 @@
     {
       "repository": "Mopati123/pulafeed-prototype",
       "branch": "feat/join-h-architecture-ir-federation",
-      "commit": "038fd9e20c5843d4d0ca8f828ebb090358401e71",
+      "commit": "920807052fdb00581ddd9481fc136cadb246f0fc",
       "architecture_path": "architecture/pulafeed_finance.architecture.json",
       "architecture_id": "pulafeed.agriculture_finance.workflow.v1",
       "domain": "agriculture_finance"
@@ -25,7 +25,7 @@
     {
       "repository": "Mopati123/easy-banking-os",
       "branch": "opencode/architecture-ir-federation",
-      "commit": "3735daaaee9062086924d522667e4a5caa59f519",
+      "commit": "56c328eb707d1db84f7d6adfc587f5e5a90a7c93",
       "architecture_path": "architecture/easy_banking.architecture.json",
       "architecture_id": "easy-banking-os.transaction-governance.v1",
       "domain": "banking"
@@ -33,7 +33,7 @@
     {
       "repository": "Mopati123/QuantMuse",
       "branch": "feat/architecture-ir-federation",
-      "commit": "ad4f9d4617f3f9291a75a7b907cb049a5078998b",
+      "commit": "e1742ecae6e2d3b3c0af5d5f9b376a9714582a20",
       "architecture_path": "architecture/quantmuse.architecture.json",
       "architecture_id": "quantmuse.ai_quant_research.v1",
       "domain": "quantitative_trading_ai"
