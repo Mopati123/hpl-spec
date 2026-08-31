@@ -19,6 +19,16 @@ _REQUIRED_SPEC_COLLECTIONS = (
     "evidence",
     "reconciliation",
 )
+_OPERATOR_SPEC_COLLECTIONS = (
+    "observables",
+    "dynamics",
+    "proposals",
+    "constraints",
+    "authorities",
+    "effects",
+    "evidence",
+    "reconciliation",
+)
 
 
 def _require_nonempty_string(value: Any, field: str) -> None:
@@ -51,6 +61,18 @@ def validate_architecture_spec(spec: ArchitectureSpec) -> None:
         if not isinstance(value, list):
             raise ValidationError(f"{field} must be an array")
         _validate_id_collection(value, field)
+
+    global_operator_ids = {}
+    for field in _OPERATOR_SPEC_COLLECTIONS:
+        for item in getattr(spec, field):
+            item_id = item["id"]
+            previous = global_operator_ids.get(item_id)
+            if previous is not None:
+                raise ValidationError(
+                    f"operator id '{item_id}' is declared in both {previous} and {field}"
+                )
+            global_operator_ids[item_id] = field
+
     if not spec.authorities:
         raise ValidationError("authorities must declare scheduler-owned execution authority")
     if not spec.evidence:
