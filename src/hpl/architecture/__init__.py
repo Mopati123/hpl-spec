@@ -11,6 +11,7 @@ from .federation_contract import (
     RECONCILIATION_REQUIRED,
     federation_contract,
 )
+from .federation_registry import REGISTRY_ID, REGISTRY_VERSION, validate_federation_registry
 from .validation import validate_architecture_ir, validate_architecture_spec
 
 __all__ = [
@@ -27,4 +28,7 @@ __all__ = [
     "EVIDENCE_REQUIRED",
     "RECONCILIATION_REQUIRED",
     "federation_contract",
+    "REGISTRY_ID",
+    "REGISTRY_VERSION",
+    "validate_federation_registry",
 ]
