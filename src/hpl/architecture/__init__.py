@@ -2,6 +2,13 @@
 
 from .models import ArchitectureIR, ArchitectureSpec
 from .compiler import compile_architecture_spec, lower_architecture_ir_to_program_ir
+from .federation_certification import (
+    FEDERATION_RECEIPT_VERSION,
+    MEMBER_RECEIPT_VERSION,
+    build_federation_receipt,
+    build_member_receipt,
+    validate_member_receipt,
+)
 from .federation_contract import (
     EVIDENCE_REQUIRED,
     EXECUTION_OWNER,
@@ -31,4 +38,9 @@ __all__ = [
     "REGISTRY_ID",
     "REGISTRY_VERSION",
     "validate_federation_registry",
+    "MEMBER_RECEIPT_VERSION",
+    "FEDERATION_RECEIPT_VERSION",
+    "build_member_receipt",
+    "validate_member_receipt",
+    "build_federation_receipt",
 ]
