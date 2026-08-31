@@ -38,6 +38,7 @@ def _receipts():
             _minimal_spec(member),
             member,
             hpl_commit=REGISTRY["hpl_commit"],
+            repository_commit=member["commit"],
         )
         for member in REGISTRY["members"]
     ]
@@ -45,8 +46,12 @@ def _receipts():
 
 def test_member_receipt_is_deterministic_and_contract_bound():
     member = REGISTRY["members"][0]
-    first = build_member_receipt(_minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"])
-    second = build_member_receipt(_minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"])
+    first = build_member_receipt(
+        _minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"], repository_commit=member["commit"]
+    )
+    second = build_member_receipt(
+        _minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"], repository_commit=member["commit"]
+    )
     assert first == second
     assert first["execution_owner"] == "hpl.scheduler"
     assert first["evidence_required"] is True
@@ -56,10 +61,37 @@ def test_member_receipt_is_deterministic_and_contract_bound():
 
 def test_member_receipt_refuses_tampering():
     member = REGISTRY["members"][0]
-    receipt = build_member_receipt(_minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"])
+    receipt = build_member_receipt(
+        _minimal_spec(member), member, hpl_commit=REGISTRY["hpl_commit"], repository_commit=member["commit"]
+    )
     receipt["execution_owner"] = "domain.scheduler"
     with pytest.raises(ValidationError, match="execution_owner contract drift"):
         validate_member_receipt(receipt, member, registry_hpl_commit=REGISTRY["hpl_commit"])
+
+
+def test_member_receipt_binds_observed_checkout_and_registry_refuses_drift():
+    member = REGISTRY["members"][0]
+    observed_commit = "0" * 40 if member["commit"] != "0" * 40 else "1" * 40
+    receipt = build_member_receipt(
+        _minimal_spec(member),
+        member,
+        hpl_commit=REGISTRY["hpl_commit"],
+        repository_commit=observed_commit,
+    )
+    assert receipt["repository_commit"] == observed_commit
+    with pytest.raises(ValidationError, match="repository_commit drift"):
+        validate_member_receipt(receipt, member, registry_hpl_commit=REGISTRY["hpl_commit"])
+
+
+def test_member_receipt_refuses_non_hex_checkout_sha():
+    member = REGISTRY["members"][0]
+    with pytest.raises(ValidationError, match="lowercase 40-character hexadecimal"):
+        build_member_receipt(
+            _minimal_spec(member),
+            member,
+            hpl_commit=REGISTRY["hpl_commit"],
+            repository_commit="z" * 40,
+        )
 
 
 def test_federation_receipt_is_order_independent():
