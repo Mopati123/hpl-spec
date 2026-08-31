@@ -37,6 +37,14 @@ def _compile_and_plan():
     return architecture_ir, program_ir, execution_plan
 
 
+def _run(execution_plan):
+    return RuntimeEngine().run(
+        execution_plan,
+        RuntimeContext(),
+        ExecutionContract(),
+    )
+
+
 def test_certified_apex_vector_reaches_scheduler_without_minting_authority():
     architecture_ir, program_ir, execution_plan = _compile_and_plan()
 
@@ -57,23 +65,39 @@ def test_certified_apex_vector_reaches_scheduler_without_minting_authority():
     )
 
 
-def test_scheduler_approved_federation_plan_executes_with_runtime_evidence():
+def test_scheduler_approved_federation_plan_runs_non_effecting_reference_path_with_evidence():
     _, _, execution_plan = _compile_and_plan()
 
-    result = RuntimeEngine().run(
-        execution_plan,
-        RuntimeContext(),
-        ExecutionContract(),
-    )
+    result = _run(execution_plan)
 
     assert result.status == "completed"
     assert result.reasons == []
     assert len(result.transcript) == len(execution_plan.steps)
     assert result.transcript
     assert all(entry["ok"] is True for entry in result.transcript)
+    # Generic ArchitectureIR lowering is an authority/reference proof only. ProgramIR
+    # operator steps do not become irreversible domain effects merely because the
+    # scheduler planned them; runtime normalizes these generic steps to NOOP.
+    assert {entry["effect_type"] for entry in result.transcript} == {"NOOP"}
+    assert all(entry["artifact_digests"] == {} for entry in result.transcript)
     assert any(record["stage"] == "runtime_start" for record in result.witness_records)
     assert any(record["stage"] == "step_ok" for record in result.witness_records)
     assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
+
+
+def test_federation_reference_path_is_deterministically_replayable():
+    first_ir, first_program_ir, first_plan = _compile_and_plan()
+    second_ir, second_program_ir, second_plan = _compile_and_plan()
+
+    first_result = _run(first_plan)
+    second_result = _run(second_plan)
+
+    assert first_ir.to_dict() == second_ir.to_dict()
+    assert first_program_ir == second_program_ir
+    assert first_plan.plan_id == second_plan.plan_id
+    assert first_plan.to_dict() == second_plan.to_dict()
+    assert first_result.result_id == second_result.result_id
+    assert first_result.to_dict() == second_result.to_dict()
 
 
 def test_federation_runtime_refuses_plan_that_scheduler_did_not_approve():
@@ -84,11 +108,7 @@ def test_federation_runtime_refuses_plan_that_scheduler_did_not_approve():
         reasons=["certification_vector_forced_denial"],
     )
 
-    result = RuntimeEngine().run(
-        denied_plan,
-        RuntimeContext(),
-        ExecutionContract(),
-    )
+    result = _run(denied_plan)
 
     assert result.status == "denied"
     assert "plan not approved" in result.reasons
@@ -102,11 +122,7 @@ def test_federation_runtime_refuses_when_scheduler_token_is_removed():
     _, _, execution_plan = _compile_and_plan()
     tokenless_plan = replace(execution_plan, execution_token=None)
 
-    result = RuntimeEngine().run(
-        tokenless_plan,
-        RuntimeContext(),
-        ExecutionContract(),
-    )
+    result = _run(tokenless_plan)
 
     assert result.status == "denied"
     assert "execution token missing" in result.reasons
