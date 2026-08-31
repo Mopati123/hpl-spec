@@ -41,6 +41,11 @@ class ArchitectureUniversalJoinTests(unittest.TestCase):
             self.assertIn("project_admissibility", program_ir["operators"])
             self.assertIn("emit_evidence", program_ir["operators"])
             self.assertIn("reconcile_effect", program_ir["operators"])
+            classes = {term["operator_id"]: term["cls"] for term in program_ir["hamiltonian"]["terms"]}
+            self.assertEqual(classes["evolve_state"], "U")
+            self.assertEqual(classes["observe_state"], "M")
+            self.assertEqual(classes["propose_transition"], "Ω")
+            self.assertEqual(classes["scheduler_authority"], "A")
 
     def test_domain_cannot_mint_execution_authority(self):
         spec = _spec()
@@ -55,6 +60,12 @@ class ArchitectureUniversalJoinTests(unittest.TestCase):
             compile_architecture_spec(spec)
         spec = _spec()
         spec["reconciliation"] = []
+        with self.assertRaises(ValidationError):
+            compile_architecture_spec(spec)
+
+    def test_cross_role_operator_collision_refuses(self):
+        spec = _spec()
+        spec["effects"][0]["id"] = "observe_state"
         with self.assertRaises(ValidationError):
             compile_architecture_spec(spec)
 
