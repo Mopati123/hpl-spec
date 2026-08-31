@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 from ..errors import ValidationError
@@ -13,6 +14,7 @@ from .federation_contract import (
 
 REGISTRY_ID = "hpl.architecture-federation.members"
 REGISTRY_VERSION = "1.0.0"
+_SHA40_RE = re.compile(r"[0-9a-f]{40}")
 _REQUIRED_MEMBER_FIELDS = (
     "repository",
     "branch",
@@ -21,6 +23,10 @@ _REQUIRED_MEMBER_FIELDS = (
     "architecture_id",
     "domain",
 )
+
+
+def _is_sha40(value: Any) -> bool:
+    return isinstance(value, str) and _SHA40_RE.fullmatch(value) is not None
 
 
 def validate_federation_registry(registry: Dict[str, Any]) -> None:
@@ -39,8 +45,8 @@ def validate_federation_registry(registry: Dict[str, Any]) -> None:
         raise ValidationError("federation registry execution authority drift")
 
     hpl_commit = registry.get("hpl_commit")
-    if not isinstance(hpl_commit, str) or len(hpl_commit) != 40:
-        raise ValidationError("federation registry must pin a 40-character HPL commit SHA")
+    if not _is_sha40(hpl_commit):
+        raise ValidationError("federation registry must pin a lowercase 40-character hexadecimal HPL commit SHA")
 
     members = registry.get("members")
     if not isinstance(members, list) or not members:
@@ -56,8 +62,8 @@ def validate_federation_registry(registry: Dict[str, Any]) -> None:
             if not isinstance(value, str) or not value.strip():
                 raise ValidationError(f"federation member {field} must be a non-empty string")
         commit = member["commit"]
-        if len(commit) != 40:
-            raise ValidationError("federation member commit must be a 40-character SHA")
+        if not _is_sha40(commit):
+            raise ValidationError("federation member commit must be a lowercase 40-character hexadecimal SHA")
         repository = member["repository"]
         architecture_id = member["architecture_id"]
         if repository in repositories:
