@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from dataclasses import replace
@@ -83,6 +84,10 @@ def _run_shadow(work_dir: Path, policy_path: Path = SHADOW_POLICY):
     finally:
         __import__("os").chdir(previous)
     return architecture_ir, program_ir, execution_plan, result
+
+
+def _sha256_digest(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
 def test_certified_apex_program_runs_only_scheduler_selected_shadow_effects(tmp_path, monkeypatch):
@@ -188,3 +193,43 @@ def test_federated_apex_shadow_policy_refusal_stops_before_trade_commit(tmp_path
     assert not (tmp_path / "shadow_fill.json").exists()
     assert not (tmp_path / "shadow_trade_ledger.json").exists()
     assert not (tmp_path / "trade_report.json").exists()
+
+
+def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
+    architecture_ir, _, _, result = _run_shadow(tmp_path)
+
+    assert result.status == "completed"
+    reconciliation_ids = {
+        item["id"] for item in architecture_ir.reconciliation_contract["requirements"]
+    }
+    assert reconciliation_ids == {"reconcile_trade_effect", "reconcile_portfolio_state"}
+
+    signal = json.loads((tmp_path / "signal.json").read_text(encoding="utf-8"))
+    fill = json.loads((tmp_path / "shadow_fill.json").read_text(encoding="utf-8"))
+    risk = json.loads((tmp_path / "risk_envelope.json").read_text(encoding="utf-8"))
+    ledger = json.loads((tmp_path / "shadow_trade_ledger.json").read_text(encoding="utf-8"))
+    report = json.loads((tmp_path / "trade_report.json").read_text(encoding="utf-8"))
+
+    assert ledger["action"] == signal["action"] == report["action"]
+    assert ledger["executed"] == fill["executed"] == report["executed"]
+    assert ledger["fill_fraction"] == fill["fill_fraction"] == report["fill_fraction"]
+    assert ledger["fill_price"] == fill["fill_price"] == report["fill_price"]
+    assert ledger["filled_size"] == fill["filled_size"]
+    assert ledger["equity"] == risk["equity"] == report["equity"]
+    assert ledger["drawdown"] == risk["drawdown"] == report["drawdown"]
+    assert ledger["pnl"] == risk["pnl"] == report["pnl"]
+    assert report["max_drawdown"] == risk["max_drawdown"]
+
+    transcript_by_effect = {entry["effect_type"]: entry for entry in result.transcript}
+    ledger_evidence = transcript_by_effect["SIM_EMIT_TRADE_LEDGER"]["artifact_digests"]
+    report_evidence = transcript_by_effect["EMIT_TRADE_REPORT"]["artifact_digests"]
+    execution_evidence = transcript_by_effect["SIM_ORDER_LIFECYCLE"]["artifact_digests"]
+
+    assert ledger_evidence["shadow_trade_ledger.json"] == _sha256_digest(
+        tmp_path / "shadow_trade_ledger.json"
+    )
+    assert report_evidence["trade_report.json"] == _sha256_digest(tmp_path / "trade_report.json")
+    assert report_evidence["trade_report.md"] == _sha256_digest(tmp_path / "trade_report.md")
+    assert execution_evidence["shadow_execution_log.json"] == _sha256_digest(
+        tmp_path / "shadow_execution_log.json"
+    )
