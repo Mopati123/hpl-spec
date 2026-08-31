@@ -1,0 +1,30 @@
+{
+  "certification_id": "hpl.architecture-federation.certification",
+  "certification_version": "1.0.0",
+  "aggregate_receipt": {
+    "execution_owner": "hpl.scheduler",
+    "federation_contract_id": "hpl.architecture-federation",
+    "federation_contract_version": "1.0.0",
+    "hpl_commit": "9f540740b5c82a2e0375fa8508ca2139fbf994d7",
+    "member_count": 4,
+    "members": [
+      {"architecture_id": "apexquantumict.seven_hamiltonian.trading.v1", "receipt_sha256": "dad088e54dba239c00dc4c610d56ae65a7411f5aaa1b41a798b2d9ecc3c13a98", "repository": "Mopati123/ApexQuantumICT", "repository_commit": "ee4705f9ea2b32eabb898dfa40b5c8917fee582d"},
+      {"architecture_id": "easy-banking-os.transaction-governance.v1", "receipt_sha256": "0cd578ca3cf95aaeb7e2c33397e4529ad861af66181c76ba0e7fa6105e6a5906", "repository": "Mopati123/easy-banking-os", "repository_commit": "56c328eb707d1db84f7d6adfc587f5e5a90a7c93"},
+      {"architecture_id": "pulafeed.agriculture_finance.workflow.v1", "receipt_sha256": "6835cbb359e61028d5ed03200aa7d69296c61ba37e5da0724141af43e67a038c", "repository": "Mopati123/pulafeed-prototype", "repository_commit": "920807052fdb00581ddd9481fc136cadb246f0fc"},
+      {"architecture_id": "quantmuse.ai_quant_research.v1", "receipt_sha256": "cb313c90ec780373544076888b000b8b4951ef0086b8286312274a9fae3ccf6f", "repository": "Mopati123/QuantMuse", "repository_commit": "e1742ecae6e2d3b3c0af5d5f9b376a9714582a20"}
+    ],
+    "merkle_root": "ce87a966cfcbf80b97279001e40bc822dbc43b2fe67279efcefc6fc231a5b732",
+    "receipt_sha256": "79403110d192660645687cc7c4d87572ad67a50ca8be0a220b0b6a00e530f919",
+    "receipt_type": "hpl.architecture-federation.aggregate",
+    "receipt_version": "1.0.0",
+    "registry_id": "hpl.architecture-federation.members",
+    "registry_sha256": "d26df21af1d494d07f5980f294008eb1d532fd1475687207563b6ce551f5ccff",
+    "registry_version": "1.0.0"
+  },
+  "member_receipts": [
+    {"architecture_id":"apexquantumict.seven_hamiltonian.trading.v1","architecture_ir_digest":"ddd68b2ffe21f64d456e88d4f0db202161b7b3103df7608905a99284fba13f04","architecture_path":"architecture/apex_seven_hamiltonian.architecture.json","branch":"feat/join-h-architecture-ir-federation","collapse_policy":"architecture_ir_scheduler_sovereignty","domain":"trading","evidence_required":true,"execution_owner":"hpl.scheduler","federation_contract_id":"hpl.architecture-federation","federation_contract_version":"1.0.0","hpl_commit":"9f540740b5c82a2e0375fa8508ca2139fbf994d7","program_ir_digest":"21e93d8d433b04470990710cacf8cbd953e00b20e4396f322656ded7b70a69d5","receipt_sha256":"dad088e54dba239c00dc4c610d56ae65a7411f5aaa1b41a798b2d9ecc3c13a98","receipt_type":"hpl.architecture-federation.member","receipt_version":"1.0.0","reconciliation_required":true,"repository":"Mopati123/ApexQuantumICT","repository_commit":"ee4705f9ea2b32eabb898dfa40b5c8917fee582d","source_digest":"51e282dfc5f20b82b86a1024bdcd81730015ac9f5839238c6a76f074f375cdb1"},
+    {"architecture_id":"easy-banking-os.transaction-governance.v1","architecture_ir_digest":"7026280fcacd908bcd4363e7171fc4b510154313958108b21e1b3ffbcf51feb8","architecture_path":"architecture/easy_banking.architecture.json","branch":"opencode/architecture-ir-federation","collapse_policy":"architecture_ir_scheduler_sovereignty","domain":"banking","evidence_required":true,"execution_owner":"hpl.scheduler","federation_contract_id":"hpl.architecture-federation","federation_contract_version":"1.0.0","hpl_commit":"9f540740b5c82a2e0375fa8508ca2139fbf994d7","program_ir_digest":"bdac1be16bbc56ca3fede41730c20c1976af6b5241da8595dde49dc9dccc5301","receipt_sha256":"0cd578ca3cf95aaeb7e2c33397e4529ad861af66181c76ba0e7fa6105e6a5906","receipt_type":"hpl.architecture-federation.member","receipt_version":"1.0.0","reconciliation_required":true,"repository":"Mopati123/easy-banking-os","repository_commit":"56c328eb707d1db84f7d6adfc587f5e5a90a7c93","source_digest":"3c5a2c0b58092229c3833a884993c28b65de14be9d8101d94765a1e2c0f78a88"},
+    {"architecture_id":"pulafeed.agriculture_finance.workflow.v1","architecture_ir_digest":"fb13bdf7723a9ed656f5a041bdd27afbd8a83dee6a98ec08b44aec5109a4afec","architecture_path":"architecture/pulafeed_finance.architecture.json","branch":"feat/join-h-architecture-ir-federation","collapse_policy":"architecture_ir_scheduler_sovereignty","domain":"agriculture_finance","evidence_required":true,"execution_owner":"hpl.scheduler","federation_contract_id":"hpl.architecture-federation","federation_contract_version":"1.0.0","hpl_commit":"9f540740b5c82a2e0375fa8508ca2139fbf994d7","program_ir_digest":"3d168a64d2279abf0ca6bb8f7bcc7790c0add63b91529966fbdc3d2857f101dc","receipt_sha256":"6835cbb359e61028d5ed03200aa7d69296c61ba37e5da0724141af43e67a038c","receipt_type":"hpl.architecture-federation.member","receipt_version":"1.0.0","reconciliation_required":true,"repository":"Mopati123/pulafeed-prototype","repository_commit":"920807052fdb00581ddd9481fc136cadb246f0fc","source_digest":"0fbb4b943addf79eba70f3890849065c337a5ee894bb9332c6a98e003362c0a7"},
+    {"architecture_id":"quantmuse.ai_quant_research.v1","architecture_ir_digest":"544c2c1ebc06101951d19ecaea13c0065f68017d42d685d73704094ad94a047a","architecture_path":"architecture/quantmuse.architecture.json","branch":"feat/architecture-ir-federation","collapse_policy":"architecture_ir_scheduler_sovereignty","domain":"quantitative_trading_ai","evidence_required":true,"execution_owner":"hpl.scheduler","federation_contract_id":"hpl.architecture-federation","federation_contract_version":"1.0.0","hpl_commit":"9f540740b5c82a2e0375fa8508ca2139fbf994d7","program_ir_digest":"027294a56bd8382331ba1d7c7b08fc62da5fbc9c0f59944ef0c6eb64d60c2441","receipt_sha256":"cb313c90ec780373544076888b000b8b4951ef0086b8286312274a9fae3ccf6f","receipt_type":"hpl.architecture-federation.member","receipt_version":"1.0.0","reconciliation_required":true,"repository":"Mopati123/QuantMuse","repository_commit":"e1742ecae6e2d3b3c0af5d5f9b376a9714582a20","source_digest":"5e8ec867319f742e353f3af51e16464f5688a921ac990aae2f2cb57cc0998595"}
+  ]
+}
