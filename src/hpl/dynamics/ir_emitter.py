@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from importlib.resources import files
 from typing import Dict, List, Tuple
 
 from ..ast import Node
@@ -100,9 +100,8 @@ def _term_from_node(node: Node) -> Tuple[str, float, Node] | None:
 
 
 def _load_schema() -> Dict:
-    root = Path(__file__).resolve().parents[3]
-    schema_path = root / "docs" / "spec" / "04_ir_schema.json"
-    with schema_path.open("r", encoding="utf-8") as handle:
+    schema_resource = files("hpl.spec_data").joinpath("04_ir_schema.json")
+    with schema_resource.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
