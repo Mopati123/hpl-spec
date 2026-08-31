@@ -46,5 +46,19 @@ def test_registry_cannot_reassign_execution_authority():
 def test_registry_refuses_unpinned_member_commit():
     registry = copy.deepcopy(_registry())
     registry["members"][0]["commit"] = "main"
-    with pytest.raises(ValidationError, match="40-character SHA"):
+    with pytest.raises(ValidationError, match="40-character hexadecimal SHA"):
+        validate_federation_registry(registry)
+
+
+def test_registry_refuses_non_hex_member_commit():
+    registry = copy.deepcopy(_registry())
+    registry["members"][0]["commit"] = "z" * 40
+    with pytest.raises(ValidationError, match="40-character hexadecimal SHA"):
+        validate_federation_registry(registry)
+
+
+def test_registry_refuses_non_hex_hpl_commit():
+    registry = copy.deepcopy(_registry())
+    registry["hpl_commit"] = "z" * 40
+    with pytest.raises(ValidationError, match="40-character hexadecimal HPL commit SHA"):
         validate_federation_registry(registry)
