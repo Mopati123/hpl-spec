@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable
 
 from ..errors import ValidationError
+from .federation_contract import (
+    EVIDENCE_REQUIRED,
+    EXECUTION_OWNER,
+    RECONCILIATION_REQUIRED,
+)
 from .models import ArchitectureIR, ArchitectureSpec
 
 _REQUIRED_SPEC_COLLECTIONS = (
@@ -75,13 +80,13 @@ def validate_architecture_spec(spec: ArchitectureSpec) -> None:
 
     if not spec.authorities:
         raise ValidationError("authorities must declare scheduler-owned execution authority")
-    if not spec.evidence:
+    if EVIDENCE_REQUIRED and not spec.evidence:
         raise ValidationError("evidence contract is required")
-    if not spec.reconciliation:
+    if RECONCILIATION_REQUIRED and not spec.reconciliation:
         raise ValidationError("reconciliation contract is required")
     for authority in spec.authorities:
-        if authority.get("kind") == "execution" and authority.get("owner") != "hpl.scheduler":
-            raise ValidationError("execution authority owner must be hpl.scheduler")
+        if authority.get("kind") == "execution" and authority.get("owner") != EXECUTION_OWNER:
+            raise ValidationError(f"execution authority owner must be {EXECUTION_OWNER}")
     if not any(a.get("kind") == "execution" for a in spec.authorities):
         raise ValidationError("execution authority declaration is required")
 
@@ -94,9 +99,9 @@ def validate_architecture_ir(ir: ArchitectureIR) -> None:
     _require_nonempty_string(ir.source_digest, "source_digest")
     _validate_id_collection(ir.operators, "operators")
     _validate_id_collection(ir.invariants, "invariants")
-    if ir.authority.get("execution_owner") != "hpl.scheduler":
+    if ir.authority.get("execution_owner") != EXECUTION_OWNER:
         raise ValidationError("ArchitectureIR cannot mint or reassign execution authority")
-    if not ir.evidence_contract.get("required", False):
-        raise ValidationError("ArchitectureIR must require evidence")
-    if not ir.reconciliation_contract.get("required", False):
-        raise ValidationError("ArchitectureIR must require reconciliation")
+    if ir.evidence_contract.get("required", False) is not EVIDENCE_REQUIRED:
+        raise ValidationError("ArchitectureIR evidence requirement must match federation contract")
+    if ir.reconciliation_contract.get("required", False) is not RECONCILIATION_REQUIRED:
+        raise ValidationError("ArchitectureIR reconciliation requirement must match federation contract")
