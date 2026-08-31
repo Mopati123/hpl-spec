@@ -7,6 +7,12 @@ import json
 from typing import Any, Dict, List
 
 from ..dynamics.ir_emitter import validate_program_ir
+from .federation_contract import (
+    EVIDENCE_REQUIRED,
+    EXECUTION_OWNER,
+    PROGRAM_IR_COLLAPSE_POLICY,
+    RECONCILIATION_REQUIRED,
+)
 from .models import ArchitectureIR, ArchitectureSpec
 from .validation import validate_architecture_ir, validate_architecture_spec
 
@@ -87,15 +93,15 @@ def compile_architecture_spec(spec: ArchitectureSpec | Dict[str, Any]) -> Archit
         operators=operators,
         invariants=sorted(spec.invariants, key=lambda item: item["id"]),
         authority={
-            "execution_owner": "hpl.scheduler",
+            "execution_owner": EXECUTION_OWNER,
             "declared_authorities": sorted(a["id"] for a in spec.authorities),
         },
         evidence_contract={
-            "required": True,
+            "required": EVIDENCE_REQUIRED,
             "operators": sorted(item["id"] for item in spec.evidence),
         },
         reconciliation_contract={
-            "required": True,
+            "required": RECONCILIATION_REQUIRED,
             "operators": sorted(item["id"] for item in spec.reconciliation),
         },
         source_digest=_digest(raw),
@@ -130,7 +136,7 @@ def lower_architecture_ir_to_program_ir(ir: ArchitectureIR) -> Dict[str, Any]:
             for item in ir.invariants
         ],
         "scheduler": {
-            "collapse_policy": "architecture_ir_scheduler_sovereignty",
+            "collapse_policy": PROGRAM_IR_COLLAPSE_POLICY,
             "authorized_observers": [],
         },
     }
