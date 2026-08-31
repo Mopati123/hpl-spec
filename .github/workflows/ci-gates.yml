@@ -14,9 +14,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install Dependencies (Deterministic)
         run: python -m pip install --disable-pip-version-check .
-      - name: Secrets Preflight (Signing Key)
+
+      - name: Trusted Signing Secret Preflight (main only)
+        if: github.event_name == 'push'
         env:
           HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
         run: |
@@ -35,13 +38,32 @@ jobs:
               SigningKey(binascii.unhexlify(seed))
           except Exception as exc:
               raise SystemExit(f"invalid HPL_CI_ED25519_PRIVATE_KEY seed: {exc}") from exc
-          print("signing secret present and well-formed")
+          print("trusted signing secret present and well-formed")
           PY
+
+      - name: PR Test Signing Identity Preflight
+        if: github.event_name == 'pull_request'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from nacl.signing import SigningKey
+
+          private_path = Path("tests/fixtures/keys/ci_ed25519_test.sk")
+          public_path = Path("tests/fixtures/keys/ci_ed25519_test.pub")
+          seed = bytes.fromhex(private_path.read_text(encoding="utf-8").strip())
+          expected_public = public_path.read_text(encoding="utf-8").strip().lower()
+          observed_public = SigningKey(seed).verify_key.encode().hex()
+          if observed_public != expected_public:
+              raise SystemExit("PR test signing keypair mismatch")
+          print("PR_TEST_SIGNING_IDENTITY_VALID")
+          PY
+
       - name: Gate A - Spec Integrity
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: python tools/ci_gate_spec_integrity.py
+
       - name: Gate C - Prohibited Behavior
         run: python tools/ci_gate_prohibited_behavior.py
       - name: Gate L2-A - Registry Validation
@@ -56,27 +78,42 @@ jobs:
         run: python -m unittest tests/test_diagnostics.py
       - name: Tests - Fast Lane (pytest, not slow)
         run: python -m pytest -q -m "not slow"
+
       - name: Epoch Anchor - Generate
         run: |
           mkdir -p artifacts
           python tools/anchor_epoch.py --epoch-id ci --output artifacts/epoch_ci.anchor.json
       - name: Epoch Anchor - Verify
         run: python tools/verify_epoch.py artifacts/epoch_ci.anchor.json
-      - name: Epoch Anchor - Sign
+
+      - name: Epoch Anchor - Sign (trusted main identity)
+        if: github.event_name == 'push'
         env:
           HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
         run: python tools/sign_anchor.py artifacts/epoch_ci.anchor.json --signature-out artifacts/epoch_ci.anchor.sig
-      - name: Epoch Anchor - Verify Signature
+      - name: Epoch Anchor - Verify Signature (trusted main identity)
+        if: github.event_name == 'push'
         run: python tools/verify_anchor_signature.py artifacts/epoch_ci.anchor.json artifacts/epoch_ci.anchor.sig --public-key config/keys/ci_ed25519.pub
+
+      - name: Epoch Anchor - Sign (PR test identity)
+        if: github.event_name == 'pull_request'
+        run: python tools/sign_anchor.py artifacts/epoch_ci.anchor.json --private-key tests/fixtures/keys/ci_ed25519_test.sk --signature-out artifacts/epoch_ci.anchor.sig
+      - name: Epoch Anchor - Verify Signature (PR test identity)
+        if: github.event_name == 'pull_request'
+        run: python tools/verify_anchor_signature.py artifacts/epoch_ci.anchor.json artifacts/epoch_ci.anchor.sig --public-key tests/fixtures/keys/ci_ed25519_test.pub
+
       - name: Schema Check - ProgramIR
         run: python tools/validate_ir_schema.py
+
       - name: Lifecycle - Run (Kernel Default)
         env:
           PYTHONPATH: src
         run: |
           mkdir -p artifacts/lifecycle
           python -m hpl.cli lifecycle examples/momentum_trade.hpl --backend classical --out-dir artifacts/lifecycle --quantum-semantics-v1 > artifacts/lifecycle/summary.json
-      - name: Bundle - Sign Manifest
+
+      - name: Bundle - Sign Manifest (trusted main identity)
+        if: github.event_name == 'push'
         env:
           HPL_CI_ED25519_PRIVATE_KEY: ${{ secrets.HPL_CI_ED25519_PRIVATE_KEY }}
         run: |
@@ -105,7 +142,26 @@ jobs:
           bundle_evidence.sign_bundle_manifest(manifest_path, key_path)
           key_path.unlink(missing_ok=True)
           PY
-      - name: Bundle - Verify Manifest Signature
+
+      - name: Bundle - Sign Manifest (PR test identity)
+        if: github.event_name == 'pull_request'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import bundle_evidence
+
+          summary = json.loads(Path("artifacts/lifecycle/summary.json").read_text(encoding="utf-8"))
+          bundle_path = Path(summary.get("bundle_path", ""))
+          manifest_path = bundle_path / "bundle_manifest.json"
+          bundle_evidence.sign_bundle_manifest(
+              manifest_path,
+              Path("tests/fixtures/keys/ci_ed25519_test.sk"),
+          )
+          PY
+
+      - name: Bundle - Verify Manifest Signature (trusted main identity)
+        if: github.event_name == 'push'
         run: |
           python - <<'PY'
           import json
@@ -124,6 +180,28 @@ jobs:
           if not ok:
               raise SystemExit(f"bundle signature verification failed: {errors}")
           PY
+
+      - name: Bundle - Verify Manifest Signature (PR test identity)
+        if: github.event_name == 'pull_request'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import bundle_evidence
+
+          summary = json.loads(Path("artifacts/lifecycle/summary.json").read_text(encoding="utf-8"))
+          bundle_path = Path(summary.get("bundle_path", ""))
+          manifest_path = bundle_path / "bundle_manifest.json"
+          signature_path = manifest_path.with_suffix(".sig")
+          ok, errors = bundle_evidence.verify_bundle_manifest_signature(
+              manifest_path,
+              signature_path,
+              Path("tests/fixtures/keys/ci_ed25519_test.pub"),
+          )
+          if not ok:
+              raise SystemExit(f"PR test bundle signature verification failed: {errors}")
+          PY
+
       - name: Bundle - Locate Directory
         id: bundle_path
         run: |
@@ -146,9 +224,17 @@ jobs:
           output = Path(__import__("os").environ["GITHUB_OUTPUT"])
           output.write_text(f"bundle_dir={bundle_path}\n" f"bundle_id={bundle_id}\n", encoding="utf-8")
           PY
-      - name: Bundle - Upload Artifact
+
+      - name: Bundle - Upload Trusted Main Artifact
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: hpl-bundle-${{ github.sha }}-${{ steps.bundle_path.outputs.bundle_id }}
+          name: hpl-trusted-bundle-${{ github.sha }}-${{ steps.bundle_path.outputs.bundle_id }}
           path: ${{ steps.bundle_path.outputs.bundle_dir }}
 
+      - name: Bundle - Upload PR Test Artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hpl-pr-test-bundle-${{ github.sha }}-${{ steps.bundle_path.outputs.bundle_id }}
+          path: ${{ steps.bundle_path.outputs.bundle_dir }}
