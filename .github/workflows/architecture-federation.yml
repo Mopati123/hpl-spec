@@ -1,0 +1,52 @@
+name: Architecture Federation
+
+on:
+  push:
+    branches:
+      - feat/architecture-ir-universal-join
+    paths:
+      - "federation/**"
+      - "src/hpl/architecture/**"
+      - "tests/test_architecture_federation_*.py"
+      - ".github/workflows/architecture-federation.yml"
+  pull_request:
+    paths:
+      - "federation/**"
+      - "src/hpl/architecture/**"
+      - "tests/test_architecture_federation_*.py"
+      - ".github/workflows/architecture-federation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  federation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install HPL
+        run: python -m pip install --disable-pip-version-check .
+      - name: Run federation contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_architecture_federation_contract.py \
+            tests/test_architecture_federation_binding.py \
+            tests/test_architecture_federation_registry.py \
+            tests/test_architecture_federation_certification.py
+      - name: Validate canonical federation registry
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from hpl.architecture import validate_federation_registry
+
+          registry = json.loads(Path("federation/members.v1.json").read_text(encoding="utf-8"))
+          validate_federation_registry(registry)
+          print("HPL_ARCHITECTURE_FEDERATION_REGISTRY_VALID")
+          print(f"member_count={len(registry['members'])}")
+          print(f"hpl_commit={registry['hpl_commit']}")
+          PY
