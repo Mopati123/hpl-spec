@@ -8,6 +8,13 @@ from hpl.architecture.federation_registry import validate_federation_registry
 from hpl.errors import ValidationError
 
 REGISTRY_PATH = Path(__file__).parents[1] / "federation" / "members.v1.json"
+CERTIFIED_HPL_ROOT = "9f540740b5c82a2e0375fa8508ca2139fbf994d7"
+CERTIFIED_MEMBER_COMMITS = {
+    "Mopati123/ApexQuantumICT": "ee4705f9ea2b32eabb898dfa40b5c8917fee582d",
+    "Mopati123/pulafeed-prototype": "920807052fdb00581ddd9481fc136cadb246f0fc",
+    "Mopati123/easy-banking-os": "56c328eb707d1db84f7d6adfc587f5e5a90a7c93",
+    "Mopati123/QuantMuse": "e1742ecae6e2d3b3c0af5d5f9b376a9714582a20",
+}
 
 
 def _registry():
@@ -18,8 +25,9 @@ def test_canonical_federation_registry_is_admissible():
     registry = _registry()
     validate_federation_registry(registry)
     assert registry["execution_owner"] == "hpl.scheduler"
-    assert registry["hpl_commit"] == "be1e37d396220c5bc3423b53a8228048cdf10307"
+    assert registry["hpl_commit"] == CERTIFIED_HPL_ROOT
     assert len(registry["members"]) == 4
+    assert {member["repository"]: member["commit"] for member in registry["members"]} == CERTIFIED_MEMBER_COMMITS
 
 
 def test_member_architecture_ids_are_unique():
