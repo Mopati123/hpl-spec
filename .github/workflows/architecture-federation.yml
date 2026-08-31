@@ -38,11 +38,11 @@ jobs:
         run: python -m pip install --disable-pip-version-check .
       - name: Run federation contract tests
         run: |
-          python -m pytest -q \
-            tests/test_architecture_federation_contract.py \
-            tests/test_architecture_federation_binding.py \
-            tests/test_architecture_federation_registry.py \
-            tests/test_architecture_federation_certification.py
+          python -m unittest -v \
+            tests.test_architecture_federation_contract \
+            tests.test_architecture_federation_binding \
+            tests.test_architecture_federation_registry \
+            tests.test_architecture_federation_certification
       - name: Validate canonical federation registry
         run: |
           python - <<'PY'
