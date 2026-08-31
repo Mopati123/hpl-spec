@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any, Dict, Iterable, List
 
 from ..errors import ValidationError
@@ -13,6 +14,7 @@ from .federation_registry import validate_federation_registry
 
 MEMBER_RECEIPT_VERSION = "1.0.0"
 FEDERATION_RECEIPT_VERSION = "1.0.0"
+_SHA40_RE = re.compile(r"[0-9a-f]{40}")
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -26,6 +28,12 @@ def _canonical_bytes(value: Any) -> bytes:
 
 def _sha256(value: Any) -> str:
     return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _require_sha40(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or _SHA40_RE.fullmatch(value) is None:
+        raise ValidationError(f"{label} requires a lowercase 40-character hexadecimal commit SHA")
+    return value
 
 
 def _merkle_root(leaves: Iterable[str]) -> str:
@@ -47,10 +55,14 @@ def build_member_receipt(
     registry_member: Dict[str, Any],
     *,
     hpl_commit: str,
+    repository_commit: str | None = None,
 ) -> Dict[str, Any]:
-    """Compile one real domain spec and bind the result to its registry member pin."""
-    if hpl_commit is None or len(hpl_commit) != 40:
-        raise ValidationError("member certification requires a 40-character HPL commit SHA")
+    """Compile one domain spec and bind it to an independently observed checkout SHA."""
+    hpl_commit = _require_sha40(hpl_commit, label="member certification HPL commit")
+    observed_commit = _require_sha40(
+        repository_commit if repository_commit is not None else registry_member.get("commit"),
+        label="member certification repository commit",
+    )
     if spec.get("architecture_id") != registry_member.get("architecture_id"):
         raise ValidationError("member architecture_id does not match federation registry")
     if spec.get("domain") != registry_member.get("domain"):
@@ -64,7 +76,7 @@ def build_member_receipt(
         "receipt_version": MEMBER_RECEIPT_VERSION,
         "repository": registry_member["repository"],
         "branch": registry_member["branch"],
-        "repository_commit": registry_member["commit"],
+        "repository_commit": observed_commit,
         "architecture_path": registry_member["architecture_path"],
         "architecture_id": architecture_ir.architecture_id,
         "domain": architecture_ir.domain,
@@ -93,6 +105,10 @@ def validate_member_receipt(
         raise ValidationError("unexpected federation member receipt type")
     if receipt.get("receipt_version") != MEMBER_RECEIPT_VERSION:
         raise ValidationError("unsupported federation member receipt version")
+    _require_sha40(registry_hpl_commit, label="federation registry HPL commit")
+    _require_sha40(receipt.get("hpl_commit"), label="federation member receipt HPL commit")
+    _require_sha40(receipt.get("repository_commit"), label="federation member receipt repository commit")
+    _require_sha40(registry_member.get("commit"), label="federation registry member commit")
     for field in (
         "repository",
         "branch",
