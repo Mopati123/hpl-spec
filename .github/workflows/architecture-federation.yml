@@ -7,12 +7,18 @@ on:
     paths:
       - "federation/**"
       - "src/hpl/architecture/**"
+      - "src/hpl/dynamics/ir_emitter.py"
+      - "src/hpl/spec_data/**"
+      - "pyproject.toml"
       - "tests/test_architecture_federation_*.py"
       - ".github/workflows/architecture-federation.yml"
   pull_request:
     paths:
       - "federation/**"
       - "src/hpl/architecture/**"
+      - "src/hpl/dynamics/ir_emitter.py"
+      - "src/hpl/spec_data/**"
+      - "pyproject.toml"
       - "tests/test_architecture_federation_*.py"
       - ".github/workflows/architecture-federation.yml"
   workflow_dispatch:
@@ -49,4 +55,40 @@ jobs:
           print("HPL_ARCHITECTURE_FEDERATION_REGISTRY_VALID")
           print(f"member_count={len(registry['members'])}")
           print(f"hpl_commit={registry['hpl_commit']}")
+          PY
+      - name: Build distribution wheel
+        run: |
+          rm -rf dist-wheel
+          python -m pip wheel --no-deps . -w dist-wheel
+          ls -l dist-wheel
+      - name: Prove ProgramIR validation from isolated wheel install
+        run: |
+          python -m venv /tmp/hpl-wheel-proof
+          /tmp/hpl-wheel-proof/bin/python -m pip install --disable-pip-version-check dist-wheel/hpl_spec-*.whl
+          cd /tmp
+          /tmp/hpl-wheel-proof/bin/python - <<'PY'
+          from hpl.dynamics.ir_emitter import validate_program_ir
+
+          program_ir = {
+              "program_id": "wheel-proof",
+              "hamiltonian": {
+                  "terms": [
+                      {"operator_id": "observe", "cls": "M", "coefficient": 1.0},
+                      {"operator_id": "authorize", "cls": "A", "coefficient": 1.0},
+                  ]
+              },
+              "operators": {
+                  "observe": {"type": "observable", "commutes_with": [], "backend_map": []},
+                  "authorize": {"type": "authority", "commutes_with": [], "backend_map": []},
+              },
+              "invariants": [
+                  {"id": "scheduler_sovereignty", "expression": "execution_owner == hpl.scheduler"}
+              ],
+              "scheduler": {
+                  "collapse_policy": "architecture_ir_scheduler_sovereignty",
+                  "authorized_observers": [],
+              },
+          }
+          validate_program_ir(program_ir)
+          print("HPL_WHEEL_PROGRAM_IR_VALIDATION_PROVEN")
           PY
