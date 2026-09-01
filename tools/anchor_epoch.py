@@ -15,6 +15,7 @@ import sys
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+from hpl.epoch_witness_protocol import validate_epoch_witness_record
 from hpl.trace import emit_witness_record
 
 
@@ -111,6 +112,7 @@ def build_epoch_anchor(
             timestamp=timestamp,
             attestation="epoch_anchor_witness",
         )
+        validate_epoch_witness_record(witness_record)
         witness_digest = _digest_text(_canonical_json(witness_record))
         anchor["papas_witness_record"] = witness_record
         anchor["papas_witness_digest"] = witness_digest
