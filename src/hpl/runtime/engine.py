@@ -23,6 +23,17 @@ ROOT = Path(__file__).resolve().parents[3]
 VERIFY_EPOCH_PATH = ROOT / "tools" / "verify_epoch.py"
 VERIFY_SIGNATURE_PATH = ROOT / "tools" / "verify_anchor_signature.py"
 DEFAULT_TIMESTAMP = "1970-01-01T00:00:00Z"
+PLAN_CORE_FIELDS = (
+    "program_id",
+    "status",
+    "steps",
+    "reasons",
+    "verification",
+    "execution_token",
+    "operator_registry_enforced",
+    "operator_registry_paths",
+    "completion_requirements",
+)
 
 
 @dataclass(frozen=True)
@@ -66,10 +77,15 @@ class RuntimeEngine:
         transcript: List[Dict[str, object]] = []
         observer_reports: List[Dict[str, object]] = []
         evidence_roles: set[str] = set()
-        execution_token = ctx.execution_token or _token_from_plan(plan)
-        if execution_token is None:
+
+        plan_integrity, plan_integrity_errors = _verify_plan_integrity(plan_dict)
+        reasons.extend(plan_integrity_errors)
+        execution_token = ctx.execution_token
+        if not plan_integrity_errors:
+            execution_token = execution_token or _token_from_plan(plan)
+        if execution_token is None and not plan_integrity_errors:
             reasons.append("execution token missing")
-        else:
+        elif execution_token is not None:
             ctx = RuntimeContext(
                 determinism_mode=ctx.determinism_mode,
                 epoch_anchor_path=ctx.epoch_anchor_path,
@@ -109,6 +125,18 @@ class RuntimeEngine:
                 attestation="runtime_start_witness",
             )
         )
+
+        if plan_integrity_errors:
+            witness_records.append(
+                _build_witness(
+                    stage="plan_integrity_denied",
+                    artifact_digests={
+                        "plan_integrity": _digest_text(_canonical_json(plan_integrity))
+                    },
+                    timestamp=ctx.timestamp,
+                    attestation="plan_integrity_denied_witness",
+                )
+            )
 
         if plan_dict.get("status") != "planned":
             reasons.append("plan not approved")
@@ -273,7 +301,9 @@ class RuntimeEngine:
                 )
             if effect_result.ok:
                 _update_evidence_roles(evidence_roles, effect_result.artifact_digests)
-            transcript.append(_build_transcript_entry(effect_step, effect_result, plan_dict, len(transcript)))
+            transcript.append(
+                _build_transcript_entry(effect_step, effect_result, plan_dict, len(transcript))
+            )
             if reasons:
                 break
             if remaining_steps is not None:
@@ -353,6 +383,21 @@ def _plan_to_dict(plan: object) -> Dict[str, object]:
     if isinstance(plan, dict):
         return plan
     raise TypeError("plan must be a dict or support to_dict")
+
+
+def _verify_plan_integrity(
+    plan: Dict[str, object],
+) -> Tuple[Dict[str, object], List[str]]:
+    plan_core = {field: plan.get(field) for field in PLAN_CORE_FIELDS}
+    expected_plan_id = _digest_text(_canonical_json(plan_core))
+    observed_plan_id = str(plan.get("plan_id", ""))
+    ok = observed_plan_id == expected_plan_id
+    verification = {
+        "ok": ok,
+        "observed_plan_id": observed_plan_id,
+        "expected_plan_id": expected_plan_id,
+    }
+    return verification, [] if ok else ["plan_integrity_mismatch"]
 
 
 def _steps_from_plan(plan: Dict[str, object]) -> List[Dict[str, object]]:
@@ -591,11 +636,19 @@ def _requires_io(step: Dict[str, object]) -> bool:
     requires = step.get("requires")
     if not isinstance(requires, dict):
         return False
-    return bool(requires.get("io_scope") or requires.get("io_scopes") or requires.get("io_endpoint"))
+    return bool(
+        requires.get("io_scope")
+        or requires.get("io_scopes")
+        or requires.get("io_endpoint")
+    )
 
 
 def _requires_net(step: Dict[str, object]) -> bool:
     requires = step.get("requires")
     if not isinstance(requires, dict):
         return False
-    return bool(requires.get("net_cap") or requires.get("net_caps") or requires.get("net_endpoint"))
+    return bool(
+        requires.get("net_cap")
+        or requires.get("net_caps")
+        or requires.get("net_endpoint")
+    )
