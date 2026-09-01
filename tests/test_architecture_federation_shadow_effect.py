@@ -199,10 +199,11 @@ def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
     architecture_ir, _, _, result = _run_shadow(tmp_path)
 
     assert result.status == "completed"
-    reconciliation_ids = {
-        item["id"] for item in architecture_ir.reconciliation_contract["requirements"]
+    assert architecture_ir.reconciliation_contract["required"] is True
+    assert set(architecture_ir.reconciliation_contract["operators"]) == {
+        "reconcile_trade_effect",
+        "reconcile_portfolio_state",
     }
-    assert reconciliation_ids == {"reconcile_trade_effect", "reconcile_portfolio_state"}
 
     signal = json.loads((tmp_path / "signal.json").read_text(encoding="utf-8"))
     fill = json.loads((tmp_path / "shadow_fill.json").read_text(encoding="utf-8"))
