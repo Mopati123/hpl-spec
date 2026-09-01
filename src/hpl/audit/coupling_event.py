@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..trace import emit_witness_record
+from .coupling_witness_protocol import validate_coupling_witness_record
 
 
 DEFAULT_TIMESTAMP = "1970-01-01T00:00:00Z"
@@ -78,6 +79,7 @@ def build_coupling_event_from_registry(
         timestamp=timestamp,
         attestation="coupling_event_witness",
     )
+    validate_coupling_witness_record(witness_record)
     witness_json = _canonical_json(witness_record)
     witness_digest = _digest_text(witness_json)
 
