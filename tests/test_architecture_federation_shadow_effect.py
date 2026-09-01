@@ -146,7 +146,7 @@ def test_certified_apex_program_runs_only_scheduler_selected_shadow_effects(tmp_
     assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
 
 
-def test_apex_shadow_effects_refuse_without_scheduler_token_before_any_effect(tmp_path, monkeypatch):
+def test_apex_shadow_effects_refuse_if_scheduler_token_is_removed_after_planning(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _, _, execution_plan = _shadow_plan()
     tokenless_plan = replace(execution_plan, execution_token=None)
@@ -158,10 +158,11 @@ def test_apex_shadow_effects_refuse_without_scheduler_token_before_any_effect(tm
     )
 
     assert result.status == "denied"
-    assert "execution token missing" in result.reasons
+    assert result.reasons == ["plan_integrity_mismatch"]
     assert result.steps == []
     assert result.transcript == []
     assert result.constraint_witnesses
+    assert any(record["stage"] == "plan_integrity_denied" for record in result.witness_records)
     assert not (tmp_path / "shadow_trade_ledger.json").exists()
     assert not (tmp_path / "trade_report.json").exists()
     assert not (tmp_path / "shadow_reconciliation.json").exists()
