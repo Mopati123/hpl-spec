@@ -110,7 +110,7 @@ def test_runtime_denies_shadow_plan_when_reconciliation_step_is_removed(tmp_path
     )
 
     assert result.status == "denied"
-    assert "completion_effect_missing:SIM_RECONCILE_TRADE" in result.reasons
-    assert "completion_evidence_missing:shadow_reconciliation.json" in result.reasons
+    assert result.reasons == ["plan_integrity_mismatch"]
+    assert result.transcript == []
     assert not (tmp_path / "shadow_reconciliation.json").exists()
-    assert any(record["stage"] == "completion_denied" for record in result.witness_records)
+    assert any(record["stage"] == "plan_integrity_denied" for record in result.witness_records)
