@@ -82,7 +82,9 @@ def test_scheduler_approved_federation_plan_runs_non_effecting_reference_path_wi
     assert all(entry["artifact_digests"] == {} for entry in result.transcript)
     assert any(record["stage"] == "runtime_start" for record in result.witness_records)
     assert any(record["stage"] == "step_ok" for record in result.witness_records)
+    assert any(record["stage"] == "runtime_terminal" for record in result.witness_records)
     assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
+    assert any(record["stage"] == "execution_completed" for record in result.witness_records)
 
 
 def test_federation_reference_path_is_deterministically_replayable():
@@ -116,8 +118,11 @@ def test_federation_runtime_refuses_plan_that_scheduler_did_not_approve():
     assert result.steps == []
     assert result.transcript == []
     assert result.constraint_witnesses
-    assert any(record["stage"] == "plan_integrity_denied" for record in result.witness_records)
-    assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
+    stages = [record["stage"] for record in result.witness_records]
+    assert "plan_integrity_denied" in stages
+    assert "runtime_terminal" in stages
+    assert "runtime_complete" not in stages
+    assert "execution_completed" not in stages
 
 
 def test_federation_runtime_refuses_when_scheduler_token_is_removed():
