@@ -6,8 +6,14 @@ from pathlib import Path
 from hpl.execution_token import ExecutionToken
 from hpl.runtime.context import RuntimeContext
 from hpl.runtime.contracts import ExecutionContract
-from hpl.runtime.engine import RuntimeEngine
+from hpl.runtime.engine import RuntimeEngine, _verify_plan_integrity
 from hpl.runtime.effects import EffectStep, get_handler
+
+
+def _bind_plan_id(plan):
+    verification, _ = _verify_plan_integrity(plan)
+    plan["plan_id"] = verification["expected_plan_id"]
+    return plan
 
 
 class DeltaSKernelTests(unittest.TestCase):
@@ -43,7 +49,7 @@ class DeltaSKernelTests(unittest.TestCase):
             delta_s_policy={"threshold": 0.1, "comparator": "gte"},
             measurement_modes_allowed=["MEASURE_CONDITION", "COMPUTE_DELTA_S", "DELTA_S_GATE"],
         )
-        plan = {
+        plan = _bind_plan_id({
             "status": "planned",
             "steps": [
                 {
@@ -53,7 +59,7 @@ class DeltaSKernelTests(unittest.TestCase):
                 }
             ],
             "execution_token": token.to_dict(),
-        }
+        })
         with tempfile.TemporaryDirectory() as tmp:
             ctx = RuntimeContext(trace_sink=Path(tmp))
             contract = ExecutionContract(allowed_steps={"collapse_step"})
