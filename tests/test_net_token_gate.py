@@ -3,7 +3,13 @@ import unittest
 from hpl.execution_token import ExecutionToken
 from hpl.runtime.context import RuntimeContext
 from hpl.runtime.contracts import ExecutionContract
-from hpl.runtime.engine import RuntimeEngine
+from hpl.runtime.engine import RuntimeEngine, _verify_plan_integrity
+
+
+def _bind_plan_id(plan):
+    verification, _ = _verify_plan_integrity(plan)
+    plan["plan_id"] = verification["expected_plan_id"]
+    return plan
 
 
 class NetTokenGateTests(unittest.TestCase):
@@ -34,7 +40,7 @@ class NetTokenGateTests(unittest.TestCase):
 
         token = ExecutionToken.build(net_policy=policy)
 
-        plan = {
+        plan = _bind_plan_id({
             "status": "planned",
             "steps": [
                 {
@@ -48,7 +54,7 @@ class NetTokenGateTests(unittest.TestCase):
                 }
             ],
             "execution_token": token.to_dict(),
-        }
+        })
 
         ctx = RuntimeContext()
         contract = ExecutionContract(allowed_steps={"net_step"})
@@ -69,7 +75,7 @@ class NetTokenGateTests(unittest.TestCase):
 
         token = ExecutionToken.build(net_policy=policy)
 
-        plan = {
+        plan = _bind_plan_id({
             "status": "planned",
             "steps": [
                 {
@@ -83,7 +89,7 @@ class NetTokenGateTests(unittest.TestCase):
                 }
             ],
             "execution_token": token.to_dict(),
-        }
+        })
 
         ctx = RuntimeContext()
         contract = ExecutionContract(allowed_steps={"net_step"})
@@ -104,7 +110,7 @@ class NetTokenGateTests(unittest.TestCase):
 
         token = ExecutionToken.build(net_policy=policy)
 
-        plan = {
+        plan = _bind_plan_id({
             "status": "planned",
             "steps": [
                 {
@@ -118,7 +124,7 @@ class NetTokenGateTests(unittest.TestCase):
                 }
             ],
             "execution_token": token.to_dict(),
-        }
+        })
 
         ctx = RuntimeContext()
         contract = ExecutionContract(allowed_steps={"net_step"})

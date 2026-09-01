@@ -125,6 +125,18 @@ class TradingShadowModeEffectsTests(unittest.TestCase):
                     "report_md_path": "trade_report.md",
                 },
             ),
+            EffectStep(
+                step_id="reconcile_trade",
+                effect_type="SIM_RECONCILE_TRADE",
+                args={
+                    "signal_path": "signal.json",
+                    "shadow_fill_path": "shadow_fill.json",
+                    "risk_envelope_path": "risk_envelope.json",
+                    "ledger_path": "shadow_trade_ledger.json",
+                    "report_path": "trade_report.json",
+                    "out_path": "shadow_reconciliation.json",
+                },
+            ),
         ]
 
         for step in steps:
@@ -132,16 +144,82 @@ class TradingShadowModeEffectsTests(unittest.TestCase):
             result = handler(step, ctx)
             self.assertTrue(result.ok, f"{step.effect_type} failed: {result.refusal_type}")
 
+        witness = json.loads((work_dir / "shadow_reconciliation.json").read_text(encoding="utf-8"))
+        self.assertTrue(witness["ok"])
+        self.assertEqual(
+            witness["operators"],
+            ["reconcile_trade_effect", "reconcile_portfolio_state"],
+        )
+        self.assertTrue(all(witness["comparisons"].values()))
         return (work_dir / "trade_report.json").read_bytes()
 
     def test_shadow_pipeline_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp_dir_one:
             report_one = self._run_shadow_pipeline(Path(tmp_dir_one), "shadow_policy_safe.json")
+            reconciliation_one = (Path(tmp_dir_one) / "shadow_reconciliation.json").read_bytes()
 
         with tempfile.TemporaryDirectory() as tmp_dir_two:
             report_two = self._run_shadow_pipeline(Path(tmp_dir_two), "shadow_policy_safe.json")
+            reconciliation_two = (Path(tmp_dir_two) / "shadow_reconciliation.json").read_bytes()
 
         self.assertEqual(report_one, report_two)
+        self.assertEqual(reconciliation_one, reconciliation_two)
+
+    def test_shadow_reconciliation_refuses_semantic_tamper(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            self._run_shadow_pipeline(work_dir, "shadow_policy_safe.json")
+            ledger_path = work_dir / "shadow_trade_ledger.json"
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            ledger["pnl"] = float(ledger["pnl"]) + 1.0
+            ledger_path.write_text(
+                json.dumps(ledger, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+
+            step = EffectStep(
+                step_id="reconcile_tampered_trade",
+                effect_type="SIM_RECONCILE_TRADE",
+                args={
+                    "signal_path": "signal.json",
+                    "shadow_fill_path": "shadow_fill.json",
+                    "risk_envelope_path": "risk_envelope.json",
+                    "ledger_path": "shadow_trade_ledger.json",
+                    "report_path": "trade_report.json",
+                    "out_path": "shadow_reconciliation.json",
+                },
+            )
+            result = get_handler(step.effect_type)(step, RuntimeContext(trace_sink=work_dir))
+            self.assertFalse(result.ok)
+            self.assertEqual(result.refusal_type, "ShadowReconciliationMismatch")
+            self.assertIn("ledger_matches_derived_state", result.refusal_reasons)
+            witness = json.loads((work_dir / "shadow_reconciliation.json").read_text(encoding="utf-8"))
+            self.assertFalse(witness["ok"])
+
+    def test_shadow_reconciliation_refuses_noncanonical_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            self._run_shadow_pipeline(work_dir, "shadow_policy_safe.json")
+            report_path = work_dir / "trade_report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+
+            step = EffectStep(
+                step_id="reconcile_noncanonical_trade",
+                effect_type="SIM_RECONCILE_TRADE",
+                args={
+                    "signal_path": "signal.json",
+                    "shadow_fill_path": "shadow_fill.json",
+                    "risk_envelope_path": "risk_envelope.json",
+                    "ledger_path": "shadow_trade_ledger.json",
+                    "report_path": "trade_report.json",
+                    "out_path": "shadow_reconciliation.json",
+                },
+            )
+            result = get_handler(step.effect_type)(step, RuntimeContext(trace_sink=work_dir))
+            self.assertFalse(result.ok)
+            self.assertEqual(result.refusal_type, "ShadowReconciliationArtifactInvalid")
+            self.assertIn("trade_report bytes are not canonical json", result.refusal_reasons)
 
     def test_shadow_latency_refusal(self):
         ctx = RuntimeContext(trace_sink=Path(tempfile.mkdtemp()))

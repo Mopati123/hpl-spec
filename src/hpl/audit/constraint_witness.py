@@ -4,6 +4,8 @@ import hashlib
 import json
 from typing import Dict, List, Optional
 
+from .constraint_witness_protocol import validate_constraint_witness_record
+
 
 DEFAULT_OBSERVER = "papas"
 
@@ -30,6 +32,7 @@ def build_constraint_witness(
     }
     if timestamp is not None:
         record["timestamp"] = timestamp
+    validate_constraint_witness_record(record)
     return record
 
 

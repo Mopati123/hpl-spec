@@ -89,11 +89,24 @@ class RuntimeContractTests(unittest.TestCase):
         result = RuntimeEngine().run(plan, ctx, contract)
         stages = [record.get("stage") for record in result.witness_records]
         self.assertIn("runtime_start", stages)
-        self.assertIn("runtime_complete", stages)
+        self.assertIn("runtime_terminal", stages)
+        self.assertNotIn("runtime_complete", stages)
+        self.assertNotIn("execution_completed", stages)
         self.assertTrue(any(stage == "step_denied" for stage in stages))
         self.assertTrue(
             all(record.get("observer_id") == "papas" for record in result.witness_records)
         )
+
+    def test_success_emits_terminal_and_completion_witnesses(self):
+        plan = _build_plan()
+        ctx = RuntimeContext()
+        contract = ExecutionContract(allowed_steps={"SURF_A", "SURF_B"})
+        result = RuntimeEngine().run(plan, ctx, contract)
+        stages = [record.get("stage") for record in result.witness_records]
+        self.assertEqual(result.status, "completed")
+        self.assertIn("runtime_terminal", stages)
+        self.assertIn("runtime_complete", stages)
+        self.assertIn("execution_completed", stages)
 
     def test_determinism_runtime_result(self):
         plan = _build_plan()

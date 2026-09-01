@@ -1,0 +1,84 @@
+name: Architecture Federation
+
+on:
+  push:
+    branches:
+      - feat/architecture-ir-universal-join
+    paths:
+      - "federation/**"
+      - "src/hpl/architecture/**"
+      - "src/hpl/dynamics/ir_emitter.py"
+      - "src/hpl/spec_data/**"
+      - "pyproject.toml"
+      - "tests/test_architecture_federation_*.py"
+      - ".github/workflows/architecture-federation.yml"
+  pull_request:
+    paths:
+      - "federation/**"
+      - "src/hpl/architecture/**"
+      - "src/hpl/dynamics/ir_emitter.py"
+      - "src/hpl/spec_data/**"
+      - "pyproject.toml"
+      - "tests/test_architecture_federation_*.py"
+      - ".github/workflows/architecture-federation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  federation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install HPL and test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check .
+          python -m pip install --disable-pip-version-check pytest
+      - name: Run complete federation certification suite
+        run: python -m pytest -q tests/test_architecture_federation_*.py
+      - name: Validate canonical federation registry
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from hpl.architecture import validate_federation_registry
+
+          registry = json.loads(Path("federation/members.v1.json").read_text(encoding="utf-8"))
+          validate_federation_registry(registry)
+          print("HPL_ARCHITECTURE_FEDERATION_REGISTRY_VALID")
+          print(f"member_count={len(registry['members'])}")
+          print(f"hpl_commit={registry['hpl_commit']}")
+          PY
+      - name: Build distribution wheel
+        run: |
+          rm -rf dist-wheel
+          python -m pip wheel --no-deps . -w dist-wheel
+          ls -l dist-wheel
+      - name: Prove ProgramIR validation from isolated wheel install
+        run: |
+          python -m venv /tmp/hpl-wheel-proof
+          /tmp/hpl-wheel-proof/bin/python -m pip install --disable-pip-version-check dist-wheel/hpl_spec-*.whl
+          cd /tmp
+          /tmp/hpl-wheel-proof/bin/python - <<'PY'
+          from hpl.dynamics.ir_emitter import validate_program_ir
+
+          program_ir = {
+              "program_id": "wheel-proof",
+              "hamiltonian": {"terms": [
+                  {"operator_id": "observe", "cls": "M", "coefficient": 1.0},
+                  {"operator_id": "authorize", "cls": "A", "coefficient": 1.0}
+              ]},
+              "operators": {
+                  "observe": {"type": "observable", "commutes_with": [], "backend_map": []},
+                  "authorize": {"type": "authority", "commutes_with": [], "backend_map": []}
+              },
+              "invariants": [{"id": "scheduler_sovereignty", "expression": "execution_owner == hpl.scheduler"}],
+              "scheduler": {"collapse_policy": "architecture_ir_scheduler_sovereignty", "authorized_observers": []}
+          }
+          validate_program_ir(program_ir)
+          print("HPL_WHEEL_PROGRAM_IR_VALIDATION_PROVEN")
+          PY

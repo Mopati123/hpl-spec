@@ -14,9 +14,7 @@ if str(SRC_PATH) not in sys.path:
 from hpl.audit.coupling_event import build_coupling_event_from_registry, write_event_json
 
 
-DEFERRED_NOTES = [
-    "Rule V1 (illegal cross-sector bypass detection) is deferred in this validator.",
-]
+DEFERRED_NOTES: List[str] = []
 
 
 def main() -> int:
@@ -183,19 +181,53 @@ def _validate_invocations(data: Dict, edges: List[Dict]) -> List[str]:
     if not isinstance(invocations, list):
         return ["Coupling registry: 'invocations' must be a list when present"]
 
-    edge_ids = {edge.get("id") for edge in edges}
+    edges_by_id = {edge.get("id"): edge for edge in edges if isinstance(edge.get("id"), str)}
     for idx, invocation in enumerate(invocations):
         if not isinstance(invocation, dict):
             errors.append(f"invocations[{idx}]: expected object")
             continue
+
         edge_id = invocation.get("edge_id")
         if not isinstance(edge_id, str) or not edge_id:
             errors.append(f"invocations[{idx}]: missing string edge_id")
             continue
-        if edge_id not in edge_ids:
+
+        edge = edges_by_id.get(edge_id)
+        if edge is None:
             errors.append(f"invocations[{idx}]: edge_id '{edge_id}' not declared")
+            continue
+
+        if not _is_cross_sector_edge(edge):
+            continue
+
+        expected_projector = edge.get("projector")
+        observed_projector = invocation.get("projector")
+        if not isinstance(observed_projector, str) or not observed_projector:
+            errors.append(
+                f"invocations[{idx}]: illegal cross-sector bypass: "
+                f"invocation for edge '{edge_id}' must declare projector '{expected_projector}'"
+            )
+            continue
+        if observed_projector != expected_projector:
+            errors.append(
+                f"invocations[{idx}]: illegal cross-sector bypass: "
+                f"projector '{observed_projector}' does not match edge '{edge_id}' "
+                f"projector '{expected_projector}'"
+            )
 
     return errors
+
+
+def _is_cross_sector_edge(edge: Dict) -> bool:
+    sector_src = edge.get("sector_src")
+    sector_dst = edge.get("sector_dst")
+    return (
+        isinstance(sector_src, str)
+        and bool(sector_src)
+        and isinstance(sector_dst, str)
+        and bool(sector_dst)
+        and sector_src != sector_dst
+    )
 
 
 def _validate_edge_projectors(edges: List[Dict], projectors: Dict[str, Dict]) -> List[str]:

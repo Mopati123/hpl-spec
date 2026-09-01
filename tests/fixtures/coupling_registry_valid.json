@@ -24,7 +24,8 @@
   ],
   "invocations": [
     {
-      "edge_id": "edge.alpha.beta"
+      "edge_id": "edge.alpha.beta",
+      "projector": "sector.alpha.projector"
     }
   ]
 }

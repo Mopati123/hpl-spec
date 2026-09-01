@@ -85,6 +85,7 @@ class ExecutionPlan:
     execution_token: Optional[Dict[str, object]] = None
     operator_registry_enforced: bool = False
     operator_registry_paths: Optional[List[str]] = None
+    completion_requirements: Optional[Dict[str, object]] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -98,6 +99,7 @@ class ExecutionPlan:
             "execution_token": self.execution_token,
             "operator_registry_enforced": self.operator_registry_enforced,
             "operator_registry_paths": list(self.operator_registry_paths or []),
+            "completion_requirements": dict(self.completion_requirements or {}),
         }
 
 
@@ -153,6 +155,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
     else:
         steps = _build_steps(program_ir)
     status = "planned" if not reasons else "denied"
+    completion_requirements = _build_completion_requirements(ctx)
 
     plan_core = {
         "program_id": program_id,
@@ -163,6 +166,7 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         "execution_token": token.to_dict(),
         "operator_registry_enforced": ctx.operator_registry_enforced,
         "operator_registry_paths": registry_sources,
+        "completion_requirements": completion_requirements,
     }
     plan_id = _digest_text(_canonical_json(plan_core))
 
@@ -186,7 +190,19 @@ def plan(program_ir: Dict[str, object], ctx: SchedulerContext) -> ExecutionPlan:
         execution_token=token.to_dict(),
         operator_registry_enforced=ctx.operator_registry_enforced,
         operator_registry_paths=registry_sources,
+        completion_requirements=completion_requirements,
     )
+
+
+def _build_completion_requirements(ctx: SchedulerContext) -> Dict[str, object]:
+    if not ctx.emit_effect_steps:
+        return {}
+    if ctx.track == "trading_shadow_mode":
+        return {
+            "required_successful_effects": ["SIM_RECONCILE_TRADE"],
+            "required_artifact_digests": ["shadow_reconciliation.json"],
+        }
+    return {}
 
 
 def _build_steps(program_ir: Dict[str, object]) -> List[Dict[str, object]]:
@@ -720,6 +736,21 @@ def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerCon
                 "risk_envelope_path": "risk_envelope.json",
                 "report_json_path": report_json,
                 "report_md_path": report_md,
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
+    add_step(
+        {
+            "step_id": f"reconcile_shadow_trade_{index}",
+            "effect_type": "SIM_RECONCILE_TRADE",
+            "args": {
+                "signal_path": "signal.json",
+                "shadow_fill_path": "shadow_fill.json",
+                "risk_envelope_path": "risk_envelope.json",
+                "ledger_path": "shadow_trade_ledger.json",
+                "report_path": report_json,
+                "out_path": "shadow_reconciliation.json",
             },
             "requires": {"backend": "CLASSICAL"},
         }

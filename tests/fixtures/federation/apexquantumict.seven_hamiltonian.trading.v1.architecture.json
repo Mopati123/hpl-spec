@@ -1,0 +1,67 @@
+{
+  "architecture_id": "apexquantumict.seven_hamiltonian.trading.v1",
+  "domain": "trading",
+  "states": [
+    {"id": "market_state"},
+    {"id": "time_state"},
+    {"id": "information_state"},
+    {"id": "portfolio_state"},
+    {"id": "risk_state"},
+    {"id": "execution_authority_state"},
+    {"id": "evidence_state"}
+  ],
+  "observables": [
+    {"id": "observe_market", "type": "measurement"},
+    {"id": "observe_time", "type": "measurement"},
+    {"id": "observe_information", "type": "measurement"},
+    {"id": "observe_portfolio", "type": "measurement"},
+    {"id": "observe_risk", "type": "measurement"}
+  ],
+  "dynamics": [
+    {"id": "H_market", "type": "hamiltonian_market"},
+    {"id": "H_time", "type": "hamiltonian_time"},
+    {"id": "H_information", "type": "hamiltonian_information"},
+    {"id": "H_portfolio", "type": "hamiltonian_portfolio"},
+    {"id": "H_risk", "type": "hamiltonian_risk"}
+  ],
+  "proposals": [
+    {"id": "propose_trade", "type": "trade_proposal"},
+    {"id": "rank_candidate_trajectory", "type": "selection_proposal"}
+  ],
+  "constraints": [
+    {"id": "project_market_admissibility", "type": "projector"},
+    {"id": "project_time_admissibility", "type": "projector"},
+    {"id": "project_information_sufficiency", "type": "projector"},
+    {"id": "project_portfolio_limits", "type": "projector"},
+    {"id": "project_risk_limits", "type": "projector"},
+    {"id": "project_total_admissibility", "type": "projector"}
+  ],
+  "invariants": [
+    {"id": "projection_before_execution", "expression": "Pi_total == true before effect"},
+    {"id": "scheduler_sovereignty", "expression": "execution_authority.owner == hpl.scheduler"},
+    {"id": "refusal_first", "expression": "inadmissible implies no_effect"},
+    {"id": "evidence_required", "expression": "effect implies deterministic_evidence"},
+    {"id": "reconciliation_required", "expression": "effect implies reconciliation"}
+  ],
+  "authorities": [
+    {"id": "H_execution_authority", "kind": "execution", "owner": "hpl.scheduler"}
+  ],
+  "effects": [
+    {"id": "commit_shadow_trade", "type": "shadow_effect"},
+    {"id": "commit_live_trade", "type": "governed_live_effect"}
+  ],
+  "evidence": [
+    {"id": "H_evidence", "type": "deterministic_evidence"},
+    {"id": "emit_trade_receipt", "type": "evidence"}
+  ],
+  "reconciliation": [
+    {"id": "reconcile_trade_effect", "type": "execution_reconciliation"},
+    {"id": "reconcile_portfolio_state", "type": "portfolio_reconciliation"}
+  ],
+  "metadata": {
+    "architecture": "seven-hamiltonian",
+    "execution_authority": "external-hpl-scheduler",
+    "contract": "ArchitectureSpec -> ArchitectureIR -> HPL ProgramIR",
+    "safety": "Apex proposes and constrains; HPL alone authorizes irreversible effects"
+  }
+}
