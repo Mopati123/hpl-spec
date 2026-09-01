@@ -23,6 +23,7 @@ class ConstraintWitnessStage(str, Enum):
     RUNTIME_REFUSAL = "runtime_refusal"
     TRADING_PAPER_REFUSAL = "trading_paper_refusal"
     CI_GOVERNANCE_REFUSAL = "ci_governance_refusal"
+    NET_SHADOW_REFUSAL = "net_shadow_refusal"
 
 
 @dataclass(frozen=True)
