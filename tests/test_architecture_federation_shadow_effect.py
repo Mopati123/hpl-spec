@@ -44,6 +44,7 @@ SHADOW_ARTIFACTS = (
     "shadow_trade_ledger.json",
     "trade_report.json",
     "trade_report.md",
+    "shadow_reconciliation.json",
 )
 
 
@@ -113,6 +114,7 @@ def test_certified_apex_program_runs_only_scheduler_selected_shadow_effects(tmp_
         "SIM_ORDER_LIFECYCLE",
         "SIM_EMIT_TRADE_LEDGER",
         "EMIT_TRADE_REPORT",
+        "SIM_RECONCILE_TRADE",
     ]
     assert not any(effect.startswith("IO_") or effect.startswith("NET_") for effect in effect_types)
 
@@ -130,11 +132,16 @@ def test_certified_apex_program_runs_only_scheduler_selected_shadow_effects(tmp_
     assert (tmp_path / "shadow_execution_log.json").is_file()
     assert (tmp_path / "trade_report.json").is_file()
     assert (tmp_path / "trade_report.md").is_file()
+    assert (tmp_path / "shadow_reconciliation.json").is_file()
 
     ledger = json.loads((tmp_path / "shadow_trade_ledger.json").read_text(encoding="utf-8"))
     report = json.loads((tmp_path / "trade_report.json").read_text(encoding="utf-8"))
+    reconciliation = json.loads(
+        (tmp_path / "shadow_reconciliation.json").read_text(encoding="utf-8")
+    )
     assert ledger
     assert report
+    assert reconciliation["ok"] is True
     assert any(record["stage"] == "scheduler_plan" for record in execution_plan.witness_records)
     assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
 
@@ -157,6 +164,7 @@ def test_apex_shadow_effects_refuse_without_scheduler_token_before_any_effect(tm
     assert result.constraint_witnesses
     assert not (tmp_path / "shadow_trade_ledger.json").exists()
     assert not (tmp_path / "trade_report.json").exists()
+    assert not (tmp_path / "shadow_reconciliation.json").exists()
 
 
 def test_federated_apex_shadow_effects_are_byte_replayable(tmp_path):
@@ -193,6 +201,7 @@ def test_federated_apex_shadow_policy_refusal_stops_before_trade_commit(tmp_path
     assert not (tmp_path / "shadow_fill.json").exists()
     assert not (tmp_path / "shadow_trade_ledger.json").exists()
     assert not (tmp_path / "trade_report.json").exists()
+    assert not (tmp_path / "shadow_reconciliation.json").exists()
 
 
 def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
@@ -200,16 +209,20 @@ def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
 
     assert result.status == "completed"
     assert architecture_ir.reconciliation_contract["required"] is True
-    assert set(architecture_ir.reconciliation_contract["operators"]) == {
+    expected_operators = {
         "reconcile_trade_effect",
         "reconcile_portfolio_state",
     }
+    assert set(architecture_ir.reconciliation_contract["operators"]) == expected_operators
 
     signal = json.loads((tmp_path / "signal.json").read_text(encoding="utf-8"))
     fill = json.loads((tmp_path / "shadow_fill.json").read_text(encoding="utf-8"))
     risk = json.loads((tmp_path / "risk_envelope.json").read_text(encoding="utf-8"))
     ledger = json.loads((tmp_path / "shadow_trade_ledger.json").read_text(encoding="utf-8"))
     report = json.loads((tmp_path / "trade_report.json").read_text(encoding="utf-8"))
+    reconciliation = json.loads(
+        (tmp_path / "shadow_reconciliation.json").read_text(encoding="utf-8")
+    )
 
     assert ledger["action"] == signal["action"] == report["action"]
     assert ledger["executed"] == fill["executed"] == report["executed"]
@@ -221,10 +234,28 @@ def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
     assert ledger["pnl"] == risk["pnl"] == report["pnl"]
     assert report["max_drawdown"] == risk["max_drawdown"]
 
+    assert reconciliation["schema_version"] == "hpl.shadow_reconciliation.v1"
+    assert reconciliation["ok"] is True
+    assert set(reconciliation["operators"]) == expected_operators
+    assert all(reconciliation["comparisons"].values())
+    assert reconciliation["reasons"] == []
+
+    source_paths = {
+        "signal": tmp_path / "signal.json",
+        "shadow_fill": tmp_path / "shadow_fill.json",
+        "risk_envelope": tmp_path / "risk_envelope.json",
+        "shadow_trade_ledger": tmp_path / "shadow_trade_ledger.json",
+        "trade_report": tmp_path / "trade_report.json",
+    }
+    assert reconciliation["source_digests"] == {
+        name: _sha256_digest(path) for name, path in source_paths.items()
+    }
+
     transcript_by_effect = {entry["effect_type"]: entry for entry in result.transcript}
     ledger_evidence = transcript_by_effect["SIM_EMIT_TRADE_LEDGER"]["artifact_digests"]
     report_evidence = transcript_by_effect["EMIT_TRADE_REPORT"]["artifact_digests"]
     execution_evidence = transcript_by_effect["SIM_ORDER_LIFECYCLE"]["artifact_digests"]
+    reconciliation_evidence = transcript_by_effect["SIM_RECONCILE_TRADE"]["artifact_digests"]
 
     assert ledger_evidence["shadow_trade_ledger.json"] == _sha256_digest(
         tmp_path / "shadow_trade_ledger.json"
@@ -233,4 +264,7 @@ def test_federated_apex_shadow_state_reconciles_with_runtime_evidence(tmp_path):
     assert report_evidence["trade_report.md"] == _sha256_digest(tmp_path / "trade_report.md")
     assert execution_evidence["shadow_execution_log.json"] == _sha256_digest(
         tmp_path / "shadow_execution_log.json"
+    )
+    assert reconciliation_evidence["shadow_reconciliation.json"] == _sha256_digest(
+        tmp_path / "shadow_reconciliation.json"
     )
