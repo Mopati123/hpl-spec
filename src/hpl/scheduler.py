@@ -724,6 +724,21 @@ def _build_trading_shadow_steps(program_ir: Dict[str, object], ctx: SchedulerCon
             "requires": {"backend": "CLASSICAL"},
         }
     )
+    add_step(
+        {
+            "step_id": f"reconcile_shadow_trade_{index}",
+            "effect_type": "SIM_RECONCILE_TRADE",
+            "args": {
+                "signal_path": "signal.json",
+                "shadow_fill_path": "shadow_fill.json",
+                "risk_envelope_path": "risk_envelope.json",
+                "ledger_path": "shadow_trade_ledger.json",
+                "report_path": report_json,
+                "out_path": "shadow_reconciliation.json",
+            },
+            "requires": {"backend": "CLASSICAL"},
+        }
+    )
 
     return steps
 
