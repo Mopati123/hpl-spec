@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from ..trace import emit_witness_record
 from .backend_ir import BackendIR, canonical_json, digest_program_ir, digest_text
+from .witness_protocol import validate_backend_witness_record
 
 
 DEFAULT_TIMESTAMP = "1970-01-01T00:00:00Z"
@@ -38,6 +39,7 @@ def lower_program_ir_to_backend_ir(
         timestamp=timestamp,
         attestation="backend_ir_witness",
     )
+    validate_backend_witness_record(witness_record)
     witness_json = canonical_json(witness_record)
     evidence = {
         "backend_ir_core_digest": core_digest,
