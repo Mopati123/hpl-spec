@@ -111,10 +111,12 @@ def test_federation_runtime_refuses_plan_that_scheduler_did_not_approve():
     result = _run(denied_plan)
 
     assert result.status == "denied"
+    assert "plan_integrity_mismatch" in result.reasons
     assert "plan not approved" in result.reasons
     assert result.steps == []
     assert result.transcript == []
     assert result.constraint_witnesses
+    assert any(record["stage"] == "plan_integrity_denied" for record in result.witness_records)
     assert any(record["stage"] == "runtime_complete" for record in result.witness_records)
 
 
@@ -125,10 +127,11 @@ def test_federation_runtime_refuses_when_scheduler_token_is_removed():
     result = _run(tokenless_plan)
 
     assert result.status == "denied"
-    assert "execution token missing" in result.reasons
+    assert result.reasons == ["plan_integrity_mismatch"]
     assert result.steps == []
     assert result.transcript == []
     assert result.constraint_witnesses
+    assert any(record["stage"] == "plan_integrity_denied" for record in result.witness_records)
 
 
 def test_certification_vector_records_immutable_domain_source_commit():
