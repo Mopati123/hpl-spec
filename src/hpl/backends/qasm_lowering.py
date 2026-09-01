@@ -7,6 +7,7 @@ from typing import Dict, List
 
 from ..trace import emit_witness_record
 from .backend_ir import canonical_json, digest_text
+from .witness_protocol import validate_backend_witness_record
 
 
 DEFAULT_TIMESTAMP = "1970-01-01T00:00:00Z"
@@ -41,6 +42,7 @@ def build_qasm_artifact(
         timestamp=timestamp,
         attestation="qasm_lowering_witness",
     )
+    validate_backend_witness_record(witness_record)
     witness_json = canonical_json(witness_record)
     return {
         "qasm": qasm,
