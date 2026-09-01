@@ -1,6 +1,6 @@
 # HPL Trading Shadow-Mode Runbook
 
-This runbook describes the **shadow-mode trading** demo pack. It is **paper-only** and does **not** touch broker APIs or real accounts. The goal is to exercise latency, partial fills, slippage, and regime shifts under the kernel while preserving refusal-first behavior and evidence signing.
+This runbook describes the **shadow-mode trading** demo pack. It is **paper-only** and does **not** touch broker APIs or real accounts. The goal is to exercise latency, partial fills, slippage, regime shifts, and deterministic reconciliation under the kernel while preserving refusal-first behavior and evidence signing.
 
 ## What Shadow-Mode Is
 
@@ -10,6 +10,7 @@ Shadow-mode is a **deterministic realism bridge**:
 - Models partial fills and slippage
 - Applies regime-shift adjustments
 - Refuses when uncertainty or staleness exceed policy
+- Reconciles signal, fill, risk, ledger, and report state before completion
 - Emits deterministic evidence and a signed bundle
 
 ## What Shadow-Mode Is Not
@@ -44,9 +45,24 @@ The output directory will include:
 - `shadow_model.json` + `shadow_seed.json`
 - `shadow_execution_log.json`
 - `shadow_trade_ledger.json`
+- `shadow_reconciliation.json`
 - Signed bundle artifacts:
   - `bundle_manifest.json`
   - `bundle_manifest.sig`
+
+### Reconciliation Stage
+
+The scheduler appends `SIM_RECONCILE_TRADE` after `EMIT_TRADE_REPORT`. The reconciliation effect is simulation-native: it does not use broker or network IO and it does not gain execution authority outside the scheduler-selected plan.
+
+`shadow_reconciliation.json` records:
+
+- the reconciliation schema version
+- the ArchitectureIR reconciliation operators
+- deterministic comparisons across signal, fill, risk, ledger, and report state
+- SHA-256 digests of the source artifact bytes
+- refusal reasons when canonical bytes or derived state do not reconcile
+
+A successful run requires the witness to report `ok=true`. Semantic mutation of derived trade state or non-canonical rewriting of a source artifact causes reconciliation refusal rather than silent completion.
 
 ## Verify Bundle Signature
 
@@ -84,7 +100,7 @@ Shadow-mode is **deterministic** when:
 - The same token/budget is applied
 - The same seed is recorded in `shadow_seed.json`
 
-Two runs with identical inputs must yield identical bundle IDs and report bytes.
+Two runs with identical inputs must yield identical bundle IDs, report bytes, and reconciliation witness bytes.
 
 ## ECMO Integration (Optional)
 
@@ -93,6 +109,7 @@ When ECMO selects the shadow track, the lifecycle will:
 
 - emit `measurement_selection.json`
 - run the shadow-mode steps
+- reconcile the resulting shadow state
 - bundle and sign evidence
 
 This preserves “external constraints force measurement” without live IO.
