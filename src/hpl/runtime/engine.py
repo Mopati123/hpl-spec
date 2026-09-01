@@ -357,12 +357,29 @@ class RuntimeEngine:
 
         witness_records.append(
             _build_witness(
-                stage="runtime_complete",
+                stage="runtime_terminal",
                 artifact_digests={"result_id": result_id},
                 timestamp=ctx.timestamp,
-                attestation="runtime_complete_witness",
+                attestation="runtime_terminal_witness",
             )
         )
+        if status == "completed":
+            witness_records.append(
+                _build_witness(
+                    stage="runtime_complete",
+                    artifact_digests={"result_id": result_id},
+                    timestamp=ctx.timestamp,
+                    attestation="runtime_complete_witness",
+                )
+            )
+            witness_records.append(
+                _build_witness(
+                    stage="execution_completed",
+                    artifact_digests={"result_id": result_id},
+                    timestamp=ctx.timestamp,
+                    attestation="execution_completed_witness",
+                )
+            )
 
         return RuntimeResult(
             result_id=result_id,
