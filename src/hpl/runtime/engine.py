@@ -279,6 +279,23 @@ class RuntimeEngine:
             if remaining_steps is not None:
                 remaining_steps -= 1
 
+        if not reasons:
+            completion_errors = _validate_completion_requirements(plan_dict, transcript)
+            if completion_errors:
+                reasons.extend(completion_errors)
+                witness_records.append(
+                    _build_witness(
+                        stage="completion_denied",
+                        artifact_digests={
+                            "completion_requirements": _digest_text(
+                                _canonical_json(plan_dict.get("completion_requirements", {}))
+                            )
+                        },
+                        timestamp=ctx.timestamp,
+                        attestation="completion_denied_witness",
+                    )
+                )
+
         status = "completed" if not reasons else "denied"
 
         if status == "denied":
@@ -387,6 +404,43 @@ def _build_transcript_entry(
         "state_hash_before": _digest_text(_canonical_json(before_state)),
         "state_hash_after": _digest_text(_canonical_json(after_state)),
     }
+
+
+def _validate_completion_requirements(
+    plan: Dict[str, object], transcript: List[Dict[str, object]]
+) -> List[str]:
+    requirements = plan.get("completion_requirements")
+    if not isinstance(requirements, dict):
+        return []
+
+    errors: List[str] = []
+    successful_effects = {
+        str(entry.get("effect_type", ""))
+        for entry in transcript
+        if entry.get("ok") is True
+    }
+    observed_artifacts = {
+        str(name)
+        for entry in transcript
+        if entry.get("ok") is True and isinstance(entry.get("artifact_digests"), dict)
+        for name in entry.get("artifact_digests", {}).keys()
+    }
+
+    required_effects = requirements.get("required_successful_effects", [])
+    if isinstance(required_effects, list):
+        for effect_type in required_effects:
+            effect = str(effect_type)
+            if effect and effect not in successful_effects:
+                errors.append(f"completion_effect_missing:{effect}")
+
+    required_artifacts = requirements.get("required_artifact_digests", [])
+    if isinstance(required_artifacts, list):
+        for artifact_name in required_artifacts:
+            artifact = str(artifact_name)
+            if artifact and artifact not in observed_artifacts:
+                errors.append(f"completion_evidence_missing:{artifact}")
+
+    return errors
 
 
 def _token_from_plan(plan: object) -> Optional[ExecutionToken]:
