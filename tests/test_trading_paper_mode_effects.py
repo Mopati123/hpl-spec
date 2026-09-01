@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from src.hpl.runtime.context import RuntimeContext
-from src.hpl.runtime.engine import RuntimeEngine
+from src.hpl.runtime.engine import RuntimeEngine, _verify_plan_integrity
 from src.hpl.runtime.contracts import ExecutionContract
 from src.hpl.runtime.effects import EffectType, EffectStep, get_handler
 from src.hpl.execution_token import ExecutionToken
@@ -13,6 +13,12 @@ from src.hpl.audit.constraint_inversion import invert_constraints
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "trading"
+
+
+def _bind_plan_id(plan):
+    verification, _ = _verify_plan_integrity(plan)
+    plan["plan_id"] = verification["expected_plan_id"]
+    return plan
 
 
 class TradingPaperModeEffectsTests(unittest.TestCase):
@@ -135,8 +141,7 @@ class TradingPaperModeEffectsTests(unittest.TestCase):
                 budget_steps=10,
                 determinism_mode="deterministic",
             )
-            plan = {
-                "plan_id": "trade_plan",
+            plan = _bind_plan_id({
                 "program_id": "trade",
                 "status": "planned",
                 "steps": steps,
@@ -144,7 +149,7 @@ class TradingPaperModeEffectsTests(unittest.TestCase):
                 "verification": None,
                 "witness_records": [],
                 "execution_token": token.to_dict(),
-            }
+            })
             contract = ExecutionContract(allowed_steps={step["step_id"] for step in steps})
             result = RuntimeEngine().run(plan, ctx, contract)
             self.assertEqual(result.status, "denied")
@@ -177,8 +182,7 @@ class TradingPaperModeEffectsTests(unittest.TestCase):
                 budget_steps=1,
                 determinism_mode="deterministic",
             )
-            plan = {
-                "plan_id": "budget_plan",
+            plan = _bind_plan_id({
                 "program_id": "budget",
                 "status": "planned",
                 "steps": steps,
@@ -186,7 +190,7 @@ class TradingPaperModeEffectsTests(unittest.TestCase):
                 "verification": None,
                 "witness_records": [],
                 "execution_token": token.to_dict(),
-            }
+            })
             contract = ExecutionContract(allowed_steps={step["step_id"] for step in steps})
             result = RuntimeEngine().run(plan, ctx, contract)
             self.assertEqual(result.status, "denied")
