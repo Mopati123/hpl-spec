@@ -54,6 +54,7 @@ from .handlers import (
     handle_verify_epoch,
     handle_verify_signature,
 )
+from .trade_reconciliation import handle_sim_reconcile_trade
 
 
 register_handler(EffectType.NOOP, handle_noop)
@@ -81,6 +82,7 @@ register_handler(EffectType.SIM_LATENCY_APPLY, handle_sim_latency_apply)
 register_handler(EffectType.SIM_PARTIAL_FILL_MODEL, handle_sim_partial_fill_model)
 register_handler(EffectType.SIM_ORDER_LIFECYCLE, handle_sim_order_lifecycle)
 register_handler(EffectType.SIM_EMIT_TRADE_LEDGER, handle_sim_emit_trade_ledger)
+register_handler(EffectType.SIM_RECONCILE_TRADE, handle_sim_reconcile_trade)
 register_handler(EffectType.NS_EVOLVE_LINEAR, handle_ns_evolve_linear)
 register_handler(EffectType.NS_APPLY_DUHAMEL, handle_ns_apply_duhamel)
 register_handler(EffectType.NS_PROJECT_LERAY, handle_ns_project_leray)
