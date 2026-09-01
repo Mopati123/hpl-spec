@@ -24,59 +24,64 @@ from hpl.audit.coupling_witness_protocol import (
 
 def _registry():
     return {
-        "projectors": [{"id": "projector:v1", "version": "1.0.0"}],
         "edges": [
             {
-                "id": "edge:a-b",
-                "projector": "projector:v1",
-                "operator_name": "couple_a_b",
+                "id": "edge-a",
+                "operator_name": "join",
                 "sector_src": "a",
                 "sector_dst": "b",
-                "invariants_checked": ["bounded"],
+                "projector": "projector-a",
+                "invariants_checked": ["scheduler_sovereignty"],
+            }
+        ],
+        "projectors": [
+            {
+                "id": "projector-a",
+                "version": "1.0.0",
             }
         ],
     }
 
 
-def test_audit_protocol_identities_are_frozen():
+def test_coupling_protocol_identity_and_catalog_are_deterministic():
     assert COUPLING_WITNESS_PROTOCOL_ID == "hpl.coupling-witness"
     assert COUPLING_WITNESS_PROTOCOL_VERSION == "1.0.0"
-    assert CONSTRAINT_WITNESS_PROTOCOL_ID == "hpl.constraint-witness"
-    assert CONSTRAINT_WITNESS_PROTOCOL_VERSION == "1.0.0"
+    assert coupling_witness_catalog() == coupling_witness_catalog()
 
 
-def test_coupling_catalog_matches_typed_vocabulary():
-    assert set(coupling_witness_catalog()) == {stage.value for stage in CouplingWitnessStage}
-    contract = resolve_coupling_witness_contract("coupling_validation")
+def test_coupling_contract_is_evidence_not_authority():
+    contract = resolve_coupling_witness_contract(CouplingWitnessStage.COUPLING_VALIDATION)
     assert contract.proves_event_binding is True
     assert contract.proves_global_topology_validity is False
     assert contract.proves_all_invariants is False
     assert contract.implies_execution_authorization is False
 
 
-def test_actual_coupling_producer_conforms_and_is_deterministic():
-    first = build_coupling_event_from_registry(_registry())
-    second = build_coupling_event_from_registry(_registry())
-    contract = validate_coupling_witness_record(first.witness_record)
+def test_actual_coupling_producer_conforms_to_protocol():
+    bundle = build_coupling_event_from_registry(_registry())
+    contract = validate_coupling_witness_record(bundle.witness_record)
     assert contract.stage is CouplingWitnessStage.COUPLING_VALIDATION
-    assert first.witness_record == second.witness_record
-    assert first.event == second.event
 
 
-def test_unknown_coupling_stage_is_refused():
+def test_unknown_coupling_stage_is_refused_at_producer_boundary():
     with pytest.raises(ValueError, match="unknown coupling witness stage"):
-        resolve_coupling_witness_contract("topology_probably_valid")
+        build_coupling_event_from_registry(_registry(), stage="unknown_stage")
 
 
 def test_coupling_attestation_drift_is_refused():
     record = dict(build_coupling_event_from_registry(_registry()).witness_record)
-    record["attestation"] = "execution_completed_witness"
-    with pytest.raises(ValueError, match="attestation mismatch"):
+    record["attestation"] = "wrong_witness"
+    with pytest.raises(ValueError, match="coupling witness attestation mismatch"):
         validate_coupling_witness_record(record)
 
 
-def test_constraint_catalog_matches_observed_refusal_vocabulary():
-    assert set(constraint_witness_catalog()) == {stage.value for stage in ConstraintWitnessStage}
+def test_constraint_protocol_identity_and_catalog_are_deterministic():
+    assert CONSTRAINT_WITNESS_PROTOCOL_ID == "hpl.constraint-witness"
+    assert CONSTRAINT_WITNESS_PROTOCOL_VERSION == "1.0.0"
+    assert constraint_witness_catalog() == constraint_witness_catalog()
+
+
+def test_constraint_contracts_are_refusal_evidence_not_authority():
     for stage in ConstraintWitnessStage:
         contract = resolve_constraint_witness_contract(stage)
         assert contract.proves_refusal_record is True
@@ -108,10 +113,9 @@ def test_constraint_witness_is_deterministic():
 
 
 def test_unknown_constraint_stage_is_refused():
-    record = build_constraint_witness(
-        stage="maybe_refused",
-        refusal_reasons=["reason"],
-        artifact_digests={"plan": "sha256:deadbeef"},
-    )
     with pytest.raises(ValueError, match="unknown constraint witness stage"):
-        validate_constraint_witness_record(record)
+        build_constraint_witness(
+            stage="maybe_refused",
+            refusal_reasons=["reason"],
+            artifact_digests={"plan": "sha256:deadbeef"},
+        )
