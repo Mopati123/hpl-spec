@@ -115,6 +115,59 @@ def _iter_with_path(node: Node, path: List[int]) -> Iterable[Tuple[Node, List[in
         for idx, child in enumerate(node.as_list()):
             yield from _iter_with_path(child, path + [idx])
 
+
+def _validate_witness_protocol(record: Dict[str, object]) -> None:
+    """Validate every governed attestation at the shared emission boundary.
+
+    Imports are intentionally local: protocol modules depend only on semantic
+    contracts, while producer modules import this trace emitter. Local imports
+    keep the trace collector independent during ordinary compiler use.
+    """
+    from .backends.witness_protocol import validate_backend_witness_record
+    from .epoch_witness_protocol import validate_epoch_witness_record
+    from .scheduler_witness_protocol import validate_scheduler_witness_record
+    from .runtime.witness_protocol import validate_runtime_witness_record
+    from .audit.coupling_witness_protocol import validate_coupling_witness_record
+    from .audit.dev_witness_protocol import validate_dev_witness_record
+
+    stage = record.get("stage")
+    validators = {
+        "epoch_anchor": validate_epoch_witness_record,
+        "backend_lowering": validate_backend_witness_record,
+        "qasm_lowering": validate_backend_witness_record,
+        "scheduler_plan": validate_scheduler_witness_record,
+        "runtime_start": validate_runtime_witness_record,
+        "plan_integrity_denied": validate_runtime_witness_record,
+        "operator_registry_denied": validate_runtime_witness_record,
+        "budget_denied": validate_runtime_witness_record,
+        "delta_s_budget_denied": validate_runtime_witness_record,
+        "io_budget_denied": validate_runtime_witness_record,
+        "net_budget_denied": validate_runtime_witness_record,
+        "delta_s_gate_denied": validate_runtime_witness_record,
+        "step_denied": validate_runtime_witness_record,
+        "step_ok": validate_runtime_witness_record,
+        "completion_denied": validate_runtime_witness_record,
+        "runtime_terminal": validate_runtime_witness_record,
+        "runtime_complete": validate_runtime_witness_record,
+        "execution_completed": validate_runtime_witness_record,
+        "coupling_event": validate_coupling_witness_record,
+        "dev_change": validate_dev_witness_record,
+    }
+
+    # epoch_verification is emitted by both scheduler and runtime. Its pair is
+    # deliberately identical in both producer protocols; validate against both
+    # contracts so drift in either owner becomes an emission-time refusal.
+    if stage == "epoch_verification":
+        validate_scheduler_witness_record(record)
+        validate_runtime_witness_record(record)
+        return
+
+    validator = validators.get(stage)
+    if validator is None:
+        raise ValueError(f"ungoverned witness stage: {stage}")
+    validator(record)
+
+
 def emit_witness_record(
     observer_id: str,
     stage: str,
@@ -132,4 +185,5 @@ def emit_witness_record(
     }
     if notes:
         record["notes"] = notes
+    _validate_witness_protocol(record)
     return record
