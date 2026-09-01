@@ -64,7 +64,7 @@ def test_actual_coupling_producer_conforms_to_protocol():
 
 
 def test_unknown_coupling_stage_is_refused_at_producer_boundary():
-    with pytest.raises(ValueError, match="unknown coupling witness stage"):
+    with pytest.raises(ValueError, match="ungoverned witness stage"):
         build_coupling_event_from_registry(_registry(), stage="unknown_stage")
 
 
