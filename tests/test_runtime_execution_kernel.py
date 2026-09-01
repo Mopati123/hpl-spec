@@ -12,8 +12,14 @@ if SRC_PATH not in sys.path:
 from hpl.execution_token import ExecutionToken
 from hpl.runtime.contracts import ExecutionContract
 from hpl.runtime.context import RuntimeContext
-from hpl.runtime.engine import RuntimeEngine
+from hpl.runtime.engine import RuntimeEngine, _verify_plan_integrity
 from hpl.runtime.effects.effect_types import EffectType
+
+
+def _bind_plan_id(plan):
+    verification, _ = _verify_plan_integrity(plan)
+    plan["plan_id"] = verification["expected_plan_id"]
+    return plan
 
 
 class ExecutionKernelTests(unittest.TestCase):
@@ -22,7 +28,6 @@ class ExecutionKernelTests(unittest.TestCase):
             tmp = Path(tmp_dir)
             artifact_path = tmp / "artifact.json"
             plan = {
-                "plan_id": "plan_kernel",
                 "program_id": "program_kernel",
                 "status": "planned",
                 "steps": [
@@ -46,6 +51,7 @@ class ExecutionKernelTests(unittest.TestCase):
             }
             token = ExecutionToken.build(allowed_backends=["CLASSICAL"])
             plan["execution_token"] = token.to_dict()
+            _bind_plan_id(plan)
             contract = ExecutionContract(allowed_steps={"step_noop", "step_emit"})
             ctx = RuntimeContext(execution_token=token)
 
@@ -60,7 +66,6 @@ class ExecutionKernelTests(unittest.TestCase):
 
     def test_refuse_on_backend_not_permitted(self):
         plan = {
-            "plan_id": "plan_backend",
             "program_id": "program_backend",
             "status": "planned",
             "steps": [
@@ -74,6 +79,7 @@ class ExecutionKernelTests(unittest.TestCase):
         }
         token = ExecutionToken.build(allowed_backends=["CLASSICAL"])
         plan["execution_token"] = token.to_dict()
+        _bind_plan_id(plan)
         contract = ExecutionContract(allowed_steps={"step_qasm"})
         ctx = RuntimeContext(execution_token=token)
 
