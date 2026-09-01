@@ -24,6 +24,7 @@ class CouplingTopologyValidatorTests(unittest.TestCase):
         path = FIXTURES / "coupling_registry_invalid_undeclared_edge.json"
         errors = validate_coupling_topology.validate_coupling_registry_file(path)
         self.assertTrue(errors)
+        self.assertTrue(any("not declared" in error for error in errors))
 
     def test_projector_mismatch(self):
         path = FIXTURES / "coupling_registry_invalid_projector_mismatch.json"
@@ -35,11 +36,48 @@ class CouplingTopologyValidatorTests(unittest.TestCase):
         errors = validate_coupling_topology.validate_coupling_registry_file(path)
         self.assertTrue(errors)
 
-    def test_deferred_bypass_rule_notice(self):
-        notes = validate_coupling_topology.DEFERRED_NOTES
-        self.assertTrue(any("deferred" in note.lower() for note in notes))
+    def test_cross_sector_invocation_without_projector_is_refused(self):
+        path = FIXTURES / "coupling_registry_invalid_cross_sector_bypass.json"
+        errors = validate_coupling_topology.validate_coupling_registry_file(path)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("illegal cross-sector bypass", errors[0])
+        self.assertIn("must declare projector 'sector.alpha.projector'", errors[0])
 
-    def test_summary_notes_in_main_output(self):
+    def test_cross_sector_invocation_with_wrong_projector_is_refused(self):
+        path = FIXTURES / "coupling_registry_invalid_invocation_projector.json"
+        errors = validate_coupling_topology.validate_coupling_registry_file(path)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("illegal cross-sector bypass", errors[0])
+        self.assertIn("does not match edge 'edge.alpha.beta'", errors[0])
+
+    def test_same_sector_invocation_does_not_require_projector_binding(self):
+        registry = {
+            "projectors": [
+                {
+                    "id": "sector.alpha.projector",
+                    "domain": ["AlphaIn"],
+                    "codomain": ["AlphaOut"],
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge.alpha.internal",
+                    "sector_src": "sector.alpha",
+                    "sector_dst": "sector.alpha",
+                    "projector": "sector.alpha.projector",
+                    "domain": ["AlphaIn"],
+                    "codomain": ["AlphaOut"],
+                    "audit": {"requires": ["CouplingEvent"]},
+                }
+            ],
+            "invocations": [{"edge_id": "edge.alpha.internal"}],
+        }
+        self.assertEqual(validate_coupling_topology.validate_coupling_registry_data(registry), [])
+
+    def test_no_deferred_topology_rules_remain(self):
+        self.assertEqual(validate_coupling_topology.DEFERRED_NOTES, [])
+
+    def test_summary_has_no_deferred_v1_notice(self):
         path = FIXTURES / "coupling_registry_valid.json"
         buf = io.StringIO()
         original_argv = sys.argv
@@ -51,7 +89,8 @@ class CouplingTopologyValidatorTests(unittest.TestCase):
             sys.argv = original_argv
 
         self.assertEqual(result, 0)
-        self.assertIn("deferred", buf.getvalue().lower())
+        self.assertNotIn("deferred", buf.getvalue().lower())
+        self.assertIn('"notes": []', buf.getvalue())
 
 
 if __name__ == "__main__":
